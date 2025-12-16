@@ -83,7 +83,8 @@ TEST(PagerTest, DetectsChecksumMismatch) {
   pager.Sync();
 
   std::fstream corrupt(TestPageFile(), std::ios::in | std::ios::out | std::ios::binary);
-  corrupt.seekp(static_cast<std::streamoff>(sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint16_t)));
+  corrupt.seekp(static_cast<std::streamoff>(sizeof(std::uint64_t) + sizeof(std::uint64_t) +
+                                            sizeof(std::uint16_t)));
   corrupt.put(static_cast<char>(0xFF));
   corrupt.flush();
 

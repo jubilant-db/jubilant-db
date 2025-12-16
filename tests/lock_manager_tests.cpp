@@ -104,7 +104,8 @@ TEST(LockManagerTest, SerializesConcurrentUpdatesAcrossRequests) {
   const auto dir = TempDir("jubilant-lock-manager");
   Pager pager = Pager::Open(dir / "data.pages", jubilant::storage::kDefaultPageSize);
   ValueLog vlog(dir / "vlog");
-  BTree tree(BTree::Config{.pager = &pager, .value_log = &vlog, .inline_threshold = 128U, .root_hint = 0});
+  BTree tree(
+      BTree::Config{.pager = &pager, .value_log = &vlog, .inline_threshold = 128U, .root_hint = 0});
   const std::string key = "counter";
 
   Record initial_record{};

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "storage/pager/pager.h"
+#include "storage/vlog/value_log.h"
+
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -7,9 +10,6 @@
 #include <string>
 #include <variant>
 #include <vector>
-
-#include "storage/pager/pager.h"
-#include "storage/vlog/value_log.h"
 
 namespace jubilant::storage::btree {
 

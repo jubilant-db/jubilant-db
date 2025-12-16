@@ -65,7 +65,9 @@ void SimpleStore::RefreshRoot() {
   superblock_.root_page_id = tree_.root_page_id();
 }
 
-std::optional<btree::Record> SimpleStore::Get(const std::string& key) const { return tree_.Find(key); }
+std::optional<btree::Record> SimpleStore::Get(const std::string& key) const {
+  return tree_.Find(key);
+}
 
 void SimpleStore::Set(const std::string& key, btree::Record record) {
   if (key.empty()) {
@@ -94,6 +96,8 @@ void SimpleStore::Sync() {
   superblock_store_.WriteNext(superblock_);
 }
 
-std::uint64_t SimpleStore::size() const noexcept { return tree_.size(); }
+std::uint64_t SimpleStore::size() const noexcept {
+  return tree_.size();
+}
 
 } // namespace jubilant::storage

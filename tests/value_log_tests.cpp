@@ -1,8 +1,8 @@
 #include "storage/vlog/value_log.h"
 
 #include <cstddef>
-#include <gtest/gtest.h>
 #include <filesystem>
+#include <gtest/gtest.h>
 #include <vector>
 
 using jubilant::storage::vlog::AppendResult;
