@@ -1,6 +1,6 @@
 // Copyright 2024 Jubilant DB
 
-#include "pager.h"
+#include "storage/pager/pager.h"
 
 #include <stdexcept>
 #include <utility>

@@ -1,0 +1,50 @@
+namespace jubilant.wire;
+
+file_identifier "JBWR";
+
+enum KeyMode : ubyte {
+  Read = 0,
+  ReadWrite = 1
+}
+
+table KeyEntry {
+  id:uint;
+  mode:KeyMode;
+  key:[ubyte];
+}
+
+enum OpCode : ubyte {
+  Get = 0,
+  Set = 1,
+  Del = 2,
+  AssertExists = 3,
+  AssertNotExists = 4,
+  AssertType = 5
+}
+
+enum ValueType : ubyte {
+  Bytes = 0,
+  String = 1,
+  Int64 = 2,
+  Tombstone = 3
+}
+
+table Operation {
+  opcode:OpCode;
+  key_id:uint;
+  asserted_type:ValueType;
+  value:[ubyte];
+}
+
+table TxnRequest {
+  keys:[KeyEntry];
+  ops:[Operation];
+}
+
+table TxnResponse {
+  ok:bool;
+  error:string;
+  results:[ubyte];
+}
+
+root_type TxnRequest;

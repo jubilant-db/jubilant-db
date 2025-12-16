@@ -43,6 +43,8 @@ file(MAKE_DIRECTORY ${JUBILANT_GENERATED_DIR})
 
 set(JUBILANT_SCHEMA_FILES
     ${JUBILANT_SCHEMA_DIR}/disk.fbs
+    ${JUBILANT_SCHEMA_DIR}/wal.fbs
+    ${JUBILANT_SCHEMA_DIR}/wire.fbs
 )
 
 set(JUBILANT_GENERATED_HEADERS)
@@ -69,7 +71,17 @@ add_custom_target(generate_schemas ALL DEPENDS ${JUBILANT_GENERATED_HEADERS})
 
 # Core library -----------------------------------------------------------------
 add_library(jubildb
-  src/pager.cpp
+  src/config/config.cpp
+  src/lock/lock_manager.cpp
+  src/meta/manifest.cpp
+  src/meta/superblock.cpp
+  src/server/server.cpp
+  src/storage/btree/btree.cpp
+  src/storage/checkpoint/checkpointer.cpp
+  src/storage/pager/pager.cpp
+  src/storage/vlog/value_log.cpp
+  src/storage/wal/wal_manager.cpp
+  src/txn/transaction_context.cpp
 )
 
 target_include_directories(jubildb

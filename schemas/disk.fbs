@@ -20,6 +20,9 @@ table Manifest {
 table SuperBlock {
   generation:ulong;
   root_page_id:ulong;
+  last_checkpoint_lsn:ulong;
+  wall_base:ulong;
+  mono_base:ulong;
   crc:ulong;
   reserved:[ubyte];
 }

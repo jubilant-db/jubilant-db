@@ -1,7 +1,8 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
+#include <vector>
 
-#include "pager.h"
+#include "storage/pager/pager.h"
 
 using jubilant::storage::PageType;
 using jubilant::storage::Pager;

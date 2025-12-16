@@ -8,6 +8,15 @@ Key entry points for the project documents:
 * `TECH_SPECIFICATION.md` — recommended stack and tooling for the implementation.
 * `FIRST_STEPS.md` — milestone-oriented checklist for bootstrapping the codebase.
 
+## Documentation map
+
+The docs are intentionally segmented so contributors can find the right level of detail quickly:
+
+* **Product & storage spec:** See `MAIN_SPECIFICATION.md` for semantics, protocol, and storage rules.
+* **Engineering stack:** See `TECH_SPECIFICATION.md` for language, build, and dependency decisions.
+* **Execution plan:** See `FIRST_STEPS.md` for the first implementation milestones and acceptance criteria.
+* **Repo standards:** Conventional commits and CI expectations are summarized at the end of `MAIN_SPECIFICATION.md`.
+
 ## CLI
 
 The repository standardizes on **`jubectl`** as the command-line interface for local administration and end-to-end exercises. The initial command set includes initialization, CRUD operations, stats, and validation/repair flows as defined in the specifications.
@@ -23,3 +32,20 @@ The codebase is organized to keep storage, transaction, and tooling concerns iso
 * `cmake/` — shared CMake helpers/toolchain settings.
 
 With these seeds in place, you can begin wiring up the build (CMake targets for the server, `jubectl`, and tests), then iterate through the FIRST_STEPS milestones.
+
+## Development readiness (v0 scaffolding)
+
+This repository currently contains scaffolding for the pager, schema generation, CLI entry points, and test harness wiring. The next steps should focus on:
+
+* Filling in storage engine components (manifest/superblock IO, WAL writer/reader, B+Tree persistence).
+* Expanding `jubectl` commands beyond `init` to drive CRUD flows.
+* Adding unit and integration tests aligned with `FIRST_STEPS.md`.
+
+Active scaffolding modules are wired into the build so they can evolve incrementally:
+
+* Storage: pager, B+Tree in-memory shim, WAL manager, value log pointer tracking, checkpoint placeholder.
+* Meta: manifest and superblock placeholders.
+* Runtime: basic lock manager, transaction context overlay, and server lifecycle shell.
+* Config: default loader with a TOML-ready hook.
+
+Every component should favor small, testable interfaces so that future work can proceed in a TDD-friendly manner.
