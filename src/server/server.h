@@ -6,6 +6,8 @@
 #include "server/transaction_receiver.h"
 #include "server/worker.h"
 #include "storage/btree/btree.h"
+#include "storage/pager/pager.h"
+#include "storage/vlog/value_log.h"
 #include "storage/wal/wal_manager.h"
 #include "txn/transaction_request.h"
 
@@ -14,6 +16,8 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <optional>
+#include <thread>
 #include <vector>
 
 namespace jubilant::server {
@@ -37,10 +41,14 @@ private:
   std::atomic<bool> running_{false};
 
   lock::LockManager lock_manager_;
-  storage::btree::BTree btree_;
+  std::optional<storage::Pager> pager_;
+  std::optional<storage::vlog::ValueLog> value_log_;
+  std::optional<storage::btree::BTree> btree_;
   storage::wal::WalManager wal_manager_;
   meta::ManifestStore manifest_store_;
   meta::SuperBlockStore superblock_store_;
+  meta::ManifestRecord manifest_record_{};
+  meta::SuperBlock superblock_{};
 
   TransactionReceiver receiver_{};
   std::shared_mutex btree_mutex_;
