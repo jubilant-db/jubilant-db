@@ -54,12 +54,12 @@ TEST(WorkerTest, ProcessesOperationsAndEmitsResults) {
   std::condition_variable results_cv;
   std::vector<TransactionResult> results;
 
-  Worker worker{"worker-0", receiver, lock_manager, btree, btree_mutex,
-                [&](TransactionResult result) {
-                  std::lock_guard guard(results_mutex);
-                  results.push_back(std::move(result));
-                  results_cv.notify_all();
-                }};
+  Worker worker{
+      "worker-0", receiver, lock_manager, btree, btree_mutex, [&](TransactionResult result) {
+        std::lock_guard guard(results_mutex);
+        results.push_back(std::move(result));
+        results_cv.notify_all();
+      }};
   worker.Start();
 
   Record record{};

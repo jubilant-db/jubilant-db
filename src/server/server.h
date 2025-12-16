@@ -48,6 +48,6 @@ private:
   std::vector<std::unique_ptr<Worker>> workers_;
   std::mutex results_mutex_;
   std::vector<TransactionResult> completed_transactions_;
-}; 
+};
 
 } // namespace jubilant::server

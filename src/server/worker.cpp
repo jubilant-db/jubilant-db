@@ -14,7 +14,8 @@ Worker::KeyLockGuard::~KeyLockGuard() {
 }
 
 Worker::Worker(std::string name, TransactionReceiver& receiver, lock::LockManager& lock_manager,
-               storage::btree::BTree& btree, std::shared_mutex& btree_mutex, CompletionFn on_complete)
+               storage::btree::BTree& btree, std::shared_mutex& btree_mutex,
+               CompletionFn on_complete)
     : name_(std::move(name)), receiver_(receiver), lock_manager_(lock_manager), btree_(btree),
       btree_mutex_(btree_mutex), on_complete_(std::move(on_complete)) {}
 
