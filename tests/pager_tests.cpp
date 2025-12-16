@@ -9,7 +9,7 @@ namespace fs = std::filesystem;
 
 using jubilant::storage::kDefaultPageSize;
 using jubilant::storage::Pager;
-  using jubilant::storage::PageType;
+using jubilant::storage::PageType;
 
 namespace {
 
