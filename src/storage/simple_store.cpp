@@ -115,7 +115,15 @@ void SimpleStore::Set(const std::string& key, btree::Record record) {
 }
 
 bool SimpleStore::Delete(const std::string& key) {
+  if (key.empty()) {
+    throw std::invalid_argument("Key must not be empty");
+  }
+
   const bool existed = tree_.Erase(key);
+  if (!existed) {
+    return false;
+  }
+
   btree::Record tombstone_record{};
   tombstone_record.metadata.ttl_epoch_seconds = 0;
   AppendRecordPage(key, tombstone_record, true);

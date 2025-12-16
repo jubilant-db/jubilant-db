@@ -72,6 +72,11 @@ std::optional<ManifestRecord> ManifestStore::Load() const {
     record.hash_algorithm = manifest_fb->hash_algorithm()->str();
   }
 
+  const auto validation = Validate(record);
+  if (!validation.ok) {
+    return std::nullopt;
+  }
+
   return record;
 }
 
@@ -86,9 +91,25 @@ ManifestValidationResult ManifestStore::Validate(
   } else if (manifest.page_size == 0) {
     result.ok = false;
     result.message = "page_size must be non-zero";
+  } else if (manifest.inline_threshold == 0 ||
+             manifest.inline_threshold >= manifest.page_size) {
+    result.ok = false;
+    result.message = "inline_threshold must be within (0, page_size)";
   } else if (manifest.db_uuid.empty()) {
     result.ok = false;
     result.message = "db_uuid must be populated";
+  } else if (manifest.wire_schema.empty()) {
+    result.ok = false;
+    result.message = "wire_schema must be populated";
+  } else if (manifest.disk_schema.empty()) {
+    result.ok = false;
+    result.message = "disk_schema must be populated";
+  } else if (manifest.wal_schema.empty()) {
+    result.ok = false;
+    result.message = "wal_schema must be populated";
+  } else if (manifest.hash_algorithm.empty()) {
+    result.ok = false;
+    result.message = "hash_algorithm must be populated";
   }
 
   return result;
@@ -98,6 +119,10 @@ bool ManifestStore::Persist(const ManifestRecord& manifest) {
   const auto validation = Validate(manifest);
   if (!validation.ok) {
     return false;
+  }
+
+  if (!manifest_path_.parent_path().empty()) {
+    std::filesystem::create_directories(manifest_path_.parent_path());
   }
 
   flatbuffers::FlatBufferBuilder builder;

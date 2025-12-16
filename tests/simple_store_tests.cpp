@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 #include <variant>
 
@@ -36,6 +37,34 @@ TEST(SimpleStoreTest, SetGetAndDelete) {
 
   EXPECT_TRUE(store.Delete("key"));
   EXPECT_FALSE(store.Get("key").has_value());
+}
+
+TEST(SimpleStoreTest, RejectsEmptyKeys) {
+  const auto dir = TempDir("jubilant-simple-store-empty-key");
+  auto store = SimpleStore::Open(dir);
+
+  Record record{};
+  record.value = std::string{"value"};
+
+  EXPECT_THROW(store.Set("", record), std::invalid_argument);
+  EXPECT_THROW(store.Delete(""), std::invalid_argument);
+}
+
+TEST(SimpleStoreTest, DeleteMissingKeyDoesNotWriteTombstone) {
+  const auto dir = TempDir("jubilant-simple-store-tombstone");
+  auto store = SimpleStore::Open(dir);
+
+  const auto data_file = dir / "data.pages";
+  const auto initial_size =
+      std::filesystem::exists(data_file)
+          ? std::filesystem::file_size(data_file)
+          : 0u;
+
+  EXPECT_FALSE(store.Delete("absent"));
+  store.Sync();
+
+  EXPECT_TRUE(std::filesystem::exists(data_file));
+  EXPECT_EQ(std::filesystem::file_size(data_file), initial_size);
 }
 
 TEST(SimpleStoreTest, PersistsAcrossReopen) {
