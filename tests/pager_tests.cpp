@@ -21,6 +21,7 @@ fs::path TestPageFile() {
 }  // namespace
 
 TEST(PagerTest, AllocatesPagesSequentially) {
+  fs::remove(TestPageFile());
   auto pager = Pager::Open(TestPageFile(), kDefaultPageSize);
   const auto first = pager.Allocate(PageType::kLeaf);
   const auto second = pager.Allocate(PageType::kInternal);
@@ -30,10 +31,11 @@ TEST(PagerTest, AllocatesPagesSequentially) {
 }
 
 TEST(PagerTest, WritesAndReadsPagePayload) {
+  fs::remove(TestPageFile());
   auto pager = Pager::Open(TestPageFile(), kDefaultPageSize);
   const auto page_id = pager.Allocate(PageType::kLeaf);
 
-  std::vector<std::byte> payload(kDefaultPageSize);
+  std::vector<std::byte> payload(pager.payload_size());
   payload[0] = std::byte{0xAB};
 
   jubilant::storage::Page page{};
@@ -42,12 +44,16 @@ TEST(PagerTest, WritesAndReadsPagePayload) {
   page.payload = payload;
 
   pager.Write(page);
-  const auto round_trip = pager.Read(page_id);
+  pager.Sync();
+
+  const auto reopened = Pager::Open(TestPageFile(), kDefaultPageSize);
+  const auto round_trip = reopened.Read(page_id);
   ASSERT_TRUE(round_trip.has_value());
   EXPECT_EQ(round_trip->payload[0], std::byte{0xAB});
 }
 
 TEST(PagerTest, RejectsInvalidPageSize) {
+  fs::remove(TestPageFile());
   auto pager = Pager::Open(TestPageFile(), kDefaultPageSize);
   jubilant::storage::Page bad{};
   bad.id = 0;

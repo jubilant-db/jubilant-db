@@ -77,8 +77,10 @@ add_library(jubildb
   src/meta/superblock.cpp
   src/server/server.cpp
   src/storage/btree/btree.cpp
+  src/storage/checksum.cpp
   src/storage/checkpoint/checkpointer.cpp
   src/storage/pager/pager.cpp
+  src/storage/simple_store.cpp
   src/storage/vlog/value_log.cpp
   src/storage/wal/wal_manager.cpp
   src/txn/transaction_context.cpp
@@ -129,6 +131,7 @@ if(JUBILANT_BUILD_TESTS)
     tests/btree_tests.cpp
     tests/checkpoint_tests.cpp
     tests/pager_tests.cpp
+    tests/simple_store_tests.cpp
     tests/transaction_context_tests.cpp
     tests/value_log_tests.cpp
     tests/wal_tests.cpp
