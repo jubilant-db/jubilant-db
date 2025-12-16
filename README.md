@@ -10,7 +10,7 @@ Jubilant DB is a single-node, hybrid memory+disk key–value store. It targets a
 ## At a glance
 
 * **Docs:** A curated index lives in [`docs/README.md`](docs/README.md); product and technical specs remain in `MAIN_SPECIFICATION.md` and `TECH_SPECIFICATION.md`.
-* **Current milestone (v0.0.1):** `jubectl init/set/get/del` flows are implemented through `SimpleStore` with UTF-8 key validation, overwrite semantics, and persistence across clean restarts. Coverage comes from unit tests for the B+Tree, pager, manifest/superblock skeleton, and the CLI-facing store wrapper. See [`FIRST_STEPS.md`](FIRST_STEPS.md) for acceptance criteria and the tests under `tests/` for evidence.
+* **Current milestone (v0.0.1):** `jubectl init/set/get/del` flows are implemented through `SimpleStore` with UTF-8 key validation, overwrite semantics, and persistence across clean restarts. Durability now includes monotonic manifest generations, CRC-protected dual superblocks, and a write-ahead log that replays on startup. Coverage comes from unit tests for the B+Tree, pager, manifest/superblock rotation, WAL replay, and the CLI-facing store wrapper. See [`FIRST_STEPS.md`](FIRST_STEPS.md) for acceptance criteria and the tests under `tests/` for evidence.
 * **Build + test quickly:** Configure with `cmake --preset dev-debug`, build via `cmake --build --preset dev-debug`, and run `ctest --preset dev-debug`.
 
 ## CLI quickstart
@@ -40,7 +40,7 @@ Linting-friendly presets exist (`dev-debug-tidy`), and `clang-format`/`clang-tid
 
 Short-term steps beyond v0.0.1:
 
-1. **Storage durability sweep:** Persist manifest generations, dual superblocks with CRC selection, and a write-ahead log replayed at startup.
+1. **(Done) Storage durability sweep:** Persist manifest generations, dual superblocks with CRC selection, and a write-ahead log replayed at startup.
 2. **B+Tree + pager completeness:** Finish page allocation and on-disk B+Tree layout, enforce page-level checksums, and plumb inline/value-log routing.
 3. **CLI and validation growth:** Extend `jubectl` with stats and validation commands, wired into the manifest/superblock metadata and storage checkpoints.
 
