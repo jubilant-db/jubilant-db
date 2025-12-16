@@ -26,6 +26,31 @@ jubectl del <db_dir> <key>
 
 Keys must be valid UTF-8 and non-empty; values may be raw bytes (hex), UTF-8 strings, or signed 64-bit integers.
 
+## Configuration
+
+`jubildb` instances read TOML configuration files through `ConfigLoader` with sensible defaults for every field except the
+database path. A minimal configuration contains only the path:
+
+```toml
+db_path = "/var/lib/jubildb"
+```
+
+Additional settings are optional and validated on load (non-zero page size, inline threshold within the page, positive cache
+size, and a listen port within `1-65535`):
+
+```toml
+db_path = "./data"
+page_size = 8192
+inline_threshold = 2048
+group_commit_max_latency_ms = 12
+cache_bytes = 134217728
+listen_address = "0.0.0.0"
+listen_port = 7777
+```
+
+Defaults mirror the current implementation: 4 KiB pages, 1 KiB inline threshold, a 64 MiB cache, 5 ms max group-commit latency,
+and `127.0.0.1:6767` for the listening socket.
+
 ## Build + contribute
 
 The repository standardizes on CMake presets (3.25+ with Ninja recommended):
