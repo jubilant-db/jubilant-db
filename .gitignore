@@ -3,6 +3,7 @@ build/
 cmake-build-*/
 out/
 bin/
+.ccache/
 
 # C/C++ intermediates
 *.o
