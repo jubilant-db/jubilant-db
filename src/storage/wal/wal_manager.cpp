@@ -4,10 +4,9 @@
 
 namespace jubilant::storage::wal {
 
-WalManager::WalManager(std::filesystem::path base_dir)
-    : wal_dir_(std::move(base_dir)) {}
+WalManager::WalManager(std::filesystem::path base_dir) : wal_dir_(std::move(base_dir)) {}
 
-Lsn WalManager::Append(const WalRecord& record) {
+auto WalManager::Append(const WalRecord& record) -> Lsn {
   const Lsn assigned = next_lsn_++;
   buffered_records_.push_back(record);
   return assigned;
@@ -18,7 +17,7 @@ void WalManager::Flush() {
   // method should fsync and advance durability cursors.
 }
 
-ReplayResult WalManager::Replay() const {
+auto WalManager::Replay() const -> ReplayResult {
   ReplayResult result{};
   result.last_replayed = next_lsn_ == 0 ? 0 : next_lsn_ - 1;
 
@@ -29,6 +28,6 @@ ReplayResult WalManager::Replay() const {
   return result;
 }
 
-Lsn WalManager::next_lsn() const noexcept { return next_lsn_; }
+auto WalManager::next_lsn() const noexcept -> Lsn { return next_lsn_; }
 
 }  // namespace jubilant::storage::wal

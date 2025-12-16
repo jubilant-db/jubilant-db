@@ -20,7 +20,7 @@ struct SuperBlock {
 
 class SuperBlockStore {
  public:
-  explicit SuperBlockStore(std::filesystem::path base_dir);
+  explicit SuperBlockStore(const std::filesystem::path& base_dir);
 
   [[nodiscard]] std::optional<SuperBlock> LoadActive() const;
   bool WriteNext(const SuperBlock& superblock);
