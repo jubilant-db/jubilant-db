@@ -6,6 +6,12 @@ This spec is “ready to build”: it nails down semantics, file layout, recover
 
 ---
 
+## Reading guide
+
+* **Sections 2–5** describe externally visible semantics (API, transactions, protocol).
+* **Sections 6–10** define storage, durability, repair, caching, and admin flows.
+* **Section 11** maps the spec to concrete components and responsibilities for implementers.
+
 ## 1. Scope
 
 ### In scope (v1)
@@ -382,6 +388,29 @@ GC semantics:
 * `repair`
 * `validate` (walk pages, verify CRCs, basic invariants)
 * `dump-manifest`
+
+---
+
+## 11. Component boundaries (implementation map)
+
+To keep development parallelizable and testable, the core system is sliced into focused components. Each should expose a narrow interface that can be exercised by unit tests and higher-level integration tests.
+
+* **Wire layer (`src/wire/`):** Request/response framing, FlatBuffers dispatch, and basic input validation.
+* **Transaction planner (`src/txn/`):** Key-table validation, lock acquisition ordering, overlay read-your-writes, and execution pipeline that emits WAL intents.
+* **Lock manager (`src/lock/`):** Per-key shared/exclusive locks with strict 2PL semantics; no deadlock detector due to canonical ordering.
+* **Storage (`src/storage/`):**
+
+  * `pager/`: Fixed-size page IO with CRC and cache hooks.
+  * `btree/`: Internal/leaf operations, inline vs. value-log references, and node splits/merges.
+  * `wal/`: Segmented WAL writer/reader with group-commit handoff and redo-only replay.
+  * `vlog/`: Value-log segment management and liveness-driven GC.
+  * `checkpoint/` and `ttl/`: Checkpointing scheduler and expiration sweeper hooks.
+* **Meta (`src/meta/`):** Manifest and superblock read/write, version enforcement, and TTL calibration persistence.
+* **Repair (`src/repair/`):** Conservative auto-repair actions invoked on open.
+* **Config (`src/config/`):** TOML-backed configuration loading, validation, and defaults.
+* **CLI (`tools/jubectl/`):** Thin administrative commands built on the server/runtime API.
+
+Each folder should include clear headers, rationale comments for invariants, and TODO markers for unimplemented behaviors to maintain alignment with this specification.
 
 ---
 

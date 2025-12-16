@@ -1,0 +1,53 @@
+namespace jubilant.wal;
+
+file_identifier "JBWL";
+
+enum RecordType : ubyte {
+  TxnBegin = 0,
+  Upsert = 1,
+  Tombstone = 2,
+  TxnCommit = 3,
+  TxnAbort = 4,
+  Checkpoint = 5
+}
+
+table ValuePointer {
+  segment_id:uint;
+  offset:ulong;
+  length:ulong;
+}
+
+enum ValueKind : ubyte {
+  Bytes = 0,
+  String = 1,
+  Int64 = 2
+}
+
+table Upsert {
+  txn_id:ulong;
+  key:[ubyte];
+  value_type:ValueKind;
+  inline_value:[ubyte];
+  value_ptr:ValuePointer;
+  ttl_epoch_seconds:ulong;
+}
+
+table Tombstone {
+  txn_id:ulong;
+  key:[ubyte];
+}
+
+table TxnMarker {
+  txn_id:ulong;
+}
+
+table WalRecord {
+  type:RecordType;
+  lsn:ulong;
+  upsert:Upsert;
+  tombstone:Tombstone;
+  marker:TxnMarker;
+  crc:uint;
+}
+
+root_type WalRecord;

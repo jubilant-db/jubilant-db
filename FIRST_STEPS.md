@@ -12,6 +12,14 @@ No WAL, no transactions, no server, no TTL, no value log.
 
 ---
 
+### How to use this checklist
+
+* Treat each numbered section as a milestone with a testable definition of done.
+* Prefer writing the unit/integration test immediately after sketching the API so TDD can drive the implementation.
+* Capture TODOs in headers and brief docstrings instead of leaving implicit assumptions.
+
+---
+
 ## 0) Repo + build (Day 0)
 
 **Deliverables**
