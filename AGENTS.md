@@ -4,3 +4,5 @@
 - Running `clang-format` before submitting is preferred; CI applies `clang-format` automatically and commits any fixes that occur during the workflow.
 - The CI pipeline relies on CMake presets (not raw configure flags). Use `cmake --preset dev-debug` for day-to-day builds and `cmake --preset dev-debug-tidy` for lints.
 - Keep tooling configurations in `.clang-format` and `.clang-tidy` authoritative; avoid wrapping imports in try/catch blocks.
+- Before making assumptions about behavior, scan the current code and documents (start with `README.md` and `CONTRIBUTING.md`) so changes align with the existing design.
+- Developer build instructions live in `CONTRIBUTING.md`; user-facing build guidance is in `README.md`.

@@ -1,6 +1,19 @@
 # Jubilant DB
 
+[![CMake Presets](https://img.shields.io/badge/build-CMake%20presets-blue)](CMakePresets.json)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Status: Active Scaffolding](https://img.shields.io/badge/status-active%20scaffolding-orange)](MAIN_SPECIFICATION.md)
+
 Jubilant DB is a single-node, hybrid memory+disk key–value store focused on clear semantics, durability primitives, and approachable tooling. The project uses FlatBuffers on the wire and on disk, relies on a B+Tree paired with a WAL and value log, and targets strict two-phase locking for transactions.
+
+## Overview
+
+The repository is scaffolded around a storage engine with a straightforward architecture:
+
+* **Storage engine core** — pager, B+Tree, value log, and WAL combine to persist key–value pairs with strict two-phase locking.
+* **Metadata layer** — manifest and superblock coordination keeps the engine bootstrappable and crash-safe.
+* **Runtime services** — transaction context overlay, lock manager, and server lifecycle wiring expose the engine to the CLI and future network endpoints.
+* **CLI tooling** — `jubectl` drives initialization, CRUD flows, stats, and repair/validation paths defined in the specifications.
 
 Key entry points for the project documents:
 
@@ -32,6 +45,30 @@ The codebase is organized to keep storage, transaction, and tooling concerns iso
 * `cmake/` — shared CMake helpers/toolchain settings.
 
 With these seeds in place, you can begin wiring up the build (CMake targets for the server, `jubectl`, and tests), then iterate through the FIRST_STEPS milestones.
+
+## Building the project
+
+The project uses CMake presets to simplify configuration for users (CMake 3.25+ and Ninja recommended):
+
+1. Configure a debug tree with tests enabled:
+
+   ```sh
+   cmake --preset dev-debug
+   ```
+
+2. Build the project artifacts (server, CLI, and tests) using the configured preset:
+
+   ```sh
+   cmake --build --preset dev-debug
+   ```
+
+3. Run the unit test suite from the generated build tree:
+
+   ```sh
+   ctest --preset dev-debug
+   ```
+
+Release-oriented presets (`dev-release` and `dev-release-tests`) follow the same pattern when you want optimizer-sensitive checks. If you prefer linting during the configure/build process, swap in the `dev-debug-tidy` preset.
 
 ## Development readiness (v0 scaffolding)
 

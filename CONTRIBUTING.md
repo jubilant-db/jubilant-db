@@ -8,9 +8,35 @@ Thanks for helping improve Jubilant DB! The following practices keep changes mov
 - **clang-format is preferred.** Running `cmake --build --preset dev-debug --target clang-format` keeps diffs tidy. The CI workflow also runs clang-format and will auto-commit any fixes it applies.
 - CMake presets drive both local and CI builds. Use `cmake --preset dev-debug` for regular builds/tests and the tidy presets for linting.
 
-## Tests and builds
-- After configuring with a preset, build with `cmake --build --preset dev-debug` and run tests using `ctest --preset dev-debug`.
-- When debugging lint issues only, you can build a smaller target (for example, `cmake --build --preset dev-debug-tidy --target unit_tests`) to speed up feedback.
+## Developer build workflow
+The repository is intentionally preset-driven so contributors can get consistent builds locally and in CI. A typical loop is:
+
+1. **Configure** a build tree (includes compile commands for IDEs):
+
+   ```sh
+   cmake --preset dev-debug
+   ```
+
+   For clang-tidy coverage, switch to `cmake --preset dev-debug-tidy`.
+
+2. **Build** the full project or targeted components:
+
+   ```sh
+   cmake --build --preset dev-debug
+   cmake --build --preset dev-debug --target clang-format
+   ```
+
+   Swap `dev-debug` for `dev-release` when checking optimizer-sensitive changes.
+
+3. **Test** using CTest via the configured preset:
+
+   ```sh
+   ctest --preset dev-debug
+   ```
+
+4. **Iterate quickly** by focusing on smaller targets (e.g., `cmake --build --preset dev-debug-tidy --target unit_tests`) when debugging lint issues.
+
+Presets live in `CMakePresets.json`; avoid hand-rolling `cmake` invocations so CI and local environments remain aligned.
 
 ## Pull requests
 - Keep changes focused and documented.
