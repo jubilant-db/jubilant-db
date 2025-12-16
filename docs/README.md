@@ -9,7 +9,7 @@ This index standardizes where to find design, implementation, and roadmap materi
 
 ## Milestones and status
 
-* **Current milestone (v0.0.1):** [`FIRST_STEPS.md`](../FIRST_STEPS.md) defines the acceptance criteria for the initial CLI-driven store. The implemented `jubectl init/set/get/del` flows are validated by unit tests in `tests/` (SimpleStore persistence, pager IO, B+Tree correctness, and metadata scaffolding).
+* **Current milestone (v0.0.1):** [`FIRST_STEPS.md`](../FIRST_STEPS.md) defines the acceptance criteria for the initial CLI-driven store. The implemented `jubectl init/set/get/del` flows are validated by unit tests in `tests/` (SimpleStore persistence, pager IO, B+Tree correctness, and metadata scaffolding). Observability now includes `jubectl stats`/`validate` that surface manifest/superblock metadata and checkpoint state for quick health checks.
 * **Test evidence:** Run `ctest --preset dev-debug` after configuring via `cmake --preset dev-debug` to exercise the v0.0.1 coverage.
 * **Server runtime scaffolding:** [`server-runtime.md`](server-runtime.md) documents the transaction receiver + worker pool wiring that will back the wire protocol in upcoming milestones.
 
