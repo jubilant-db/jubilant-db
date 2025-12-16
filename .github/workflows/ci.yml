@@ -20,6 +20,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure compiler cache directory exists
+        run: mkdir -p "${{ env.CCACHE_DIR }}"
+
       - name: Prepare compiler cache
         uses: actions/cache@v4
         with:
