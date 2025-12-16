@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
-#include <unordered_map>
 #include <vector>
 
 namespace jubilant::storage {
@@ -35,16 +34,40 @@ class Pager {
   [[nodiscard]] std::optional<Page> Read(std::uint64_t page_id) const;
   void Sync() const;
 
+  Pager(const Pager &) = delete;
+  Pager &operator=(const Pager &) = delete;
+  Pager(Pager &&other) noexcept;
+  Pager &operator=(Pager &&other) noexcept;
+  ~Pager();
+
+  [[nodiscard]] std::uint64_t page_count() const noexcept;
+  [[nodiscard]] std::uint32_t payload_size() const noexcept;
+
   [[nodiscard]] const std::filesystem::path &data_path() const noexcept;
   [[nodiscard]] std::uint32_t page_size() const noexcept;
 
  private:
-  Pager(std::filesystem::path data_path, std::uint32_t page_size);
+  Pager(std::filesystem::path data_path, std::uint32_t page_size, int fd,
+        std::uint64_t next_page);
+
+  struct PageHeader {
+    std::uint64_t id{0};
+    std::uint16_t type{0};
+    std::uint32_t crc{0};
+    std::uint16_t reserved{0};
+  };
 
   std::filesystem::path data_path_;
   std::uint32_t page_size_;
+  std::uint32_t payload_size_;
   std::uint64_t next_page_id_{0};
-  std::unordered_map<std::uint64_t, Page> in_memory_pages_;
+  int fd_{-1};
+
+  [[nodiscard]] std::uint64_t OffsetFor(std::uint64_t page_id) const;
+  [[nodiscard]] static std::uint32_t ComputeCrc(
+      const std::vector<std::byte> &payload);
+  [[nodiscard]] static Page ParsePage(const std::vector<std::byte> &buffer,
+                                      std::uint32_t payload_size);
 };
 
 }  // namespace jubilant::storage
