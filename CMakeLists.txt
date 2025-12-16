@@ -148,6 +148,7 @@ if(JUBILANT_BUILD_TESTS)
     tests/manifest_tests.cpp
     tests/pager_tests.cpp
     tests/simple_store_tests.cpp
+    tests/superblock_tests.cpp
     tests/transaction_context_tests.cpp
     tests/value_log_tests.cpp
     tests/wal_tests.cpp
