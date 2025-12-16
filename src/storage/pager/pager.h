@@ -46,8 +46,9 @@ class Pager {
   [[nodiscard]] std::uint32_t page_size() const noexcept;
 
  private:
-  Pager(std::filesystem::path data_path, std::uint32_t page_size, int fd,
-        std::uint64_t next_page);
+  Pager(std::filesystem::path data_path, std::uint32_t page_size,
+        int file_descriptor,
+        std::uint64_t next_page);  // NOLINT(bugprone-easily-swappable-parameters)
 
   struct PageHeader {
     std::uint64_t id{0};
@@ -60,7 +61,7 @@ class Pager {
   std::uint32_t page_size_;
   std::uint32_t payload_size_;
   std::uint64_t next_page_id_{0};
-  int fd_{-1};
+  int file_descriptor_{-1};
 
   [[nodiscard]] std::uint64_t OffsetFor(std::uint64_t page_id) const;
   [[nodiscard]] static std::uint32_t ComputeCrc(

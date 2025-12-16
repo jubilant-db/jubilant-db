@@ -26,13 +26,14 @@ struct ManifestValidationResult {
 
 class ManifestStore {
  public:
-  explicit ManifestStore(std::filesystem::path base_dir);
+  explicit ManifestStore(const std::filesystem::path& base_dir);
 
-  [[nodiscard]] ManifestRecord NewDefault(std::string uuid_seed) const;
-  [[nodiscard]] std::optional<ManifestRecord> Load() const;
-  [[nodiscard]] ManifestValidationResult Validate(
-      const ManifestRecord& manifest) const;
-  bool Persist(const ManifestRecord& manifest);
+  [[nodiscard]] static auto NewDefault(std::string uuid_seed)
+      -> ManifestRecord;
+  [[nodiscard]] auto Load() const -> std::optional<ManifestRecord>;
+  [[nodiscard]] static auto Validate(const ManifestRecord& manifest)
+      -> ManifestValidationResult;
+  auto Persist(const ManifestRecord& manifest) -> bool;
 
  private:
   std::filesystem::path manifest_path_;

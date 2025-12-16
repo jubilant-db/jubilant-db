@@ -7,7 +7,7 @@ namespace jubilant::storage::vlog {
 ValueLog::ValueLog(std::filesystem::path base_dir)
     : base_dir_(std::move(base_dir)) {}
 
-AppendResult ValueLog::Append(const std::vector<std::byte>& data) {
+auto ValueLog::Append(const std::vector<std::byte>& data) -> AppendResult {
   AppendResult result{};
   result.pointer = next_pointer_;
   result.length = data.size();
@@ -18,8 +18,8 @@ AppendResult ValueLog::Append(const std::vector<std::byte>& data) {
   return result;
 }
 
-std::optional<std::vector<std::byte>> ValueLog::Read(
-    const SegmentPointer& /*pointer*/) const {
+auto ValueLog::Read(const SegmentPointer& /*pointer*/)
+    -> std::optional<std::vector<std::byte>> {
   // Value log persistence is intentionally deferred. Returning nullopt allows
   // callers to handle missing segments gracefully in early tests.
   return std::nullopt;

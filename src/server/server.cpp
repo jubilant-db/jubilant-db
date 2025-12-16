@@ -37,7 +37,7 @@ void Server::Stop() {
   workers_.clear();
 }
 
-bool Server::running() const noexcept { return running_.load(); }
+auto Server::running() const noexcept -> bool { return running_.load(); }
 
 void Server::WorkerLoop() {
   // Request dispatch will be wired up after the wire protocol lands. Keeping a

@@ -12,19 +12,19 @@ void LockManager::Acquire(const std::string& key, LockMode mode) {
 }
 
 void LockManager::Release(const std::string& key, LockMode mode) {
-  auto it = mutexes_.find(key);
-  if (it == mutexes_.end()) {
+  auto mutex_iter = mutexes_.find(key);
+  if (mutex_iter == mutexes_.end()) {
     return;
   }
 
   if (mode == LockMode::kShared) {
-    it->second.unlock_shared();
+    mutex_iter->second.unlock_shared();
   } else {
-    it->second.unlock();
+    mutex_iter->second.unlock();
   }
 }
 
-std::shared_mutex& LockManager::MutexFor(const std::string& key) {
+auto LockManager::MutexFor(const std::string& key) -> std::shared_mutex& {
   std::scoped_lock guard(map_mutex_);
   return mutexes_[key];
 }

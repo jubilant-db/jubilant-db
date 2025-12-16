@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <compare>
 #include <cstring>
 #include <stdexcept>
 #include <utility>
@@ -14,49 +15,50 @@
 
 namespace jubilant::storage {
 
-Pager::Pager(std::filesystem::path data_path, std::uint32_t page_size, int fd,
-             std::uint64_t next_page)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+Pager::Pager(std::filesystem::path data_path, std::uint32_t page_size,
+             int file_descriptor, std::uint64_t next_page)
     : data_path_(std::move(data_path)),
       page_size_(page_size),
       payload_size_(page_size - sizeof(PageHeader)),
       next_page_id_(next_page),
-      fd_(fd) {}
+      file_descriptor_(file_descriptor) {}
 
 Pager::Pager(Pager &&other) noexcept
     : data_path_(std::move(other.data_path_)),
       page_size_(other.page_size_),
       payload_size_(other.payload_size_),
       next_page_id_(other.next_page_id_),
-      fd_(other.fd_) {
-  other.fd_ = -1;
+      file_descriptor_(other.file_descriptor_) {
+  other.file_descriptor_ = -1;
 }
 
-Pager &Pager::operator=(Pager &&other) noexcept {
+auto Pager::operator=(Pager &&other) noexcept -> Pager & {
   if (this == &other) {
     return *this;
   }
 
-  if (fd_ >= 0) {
-    ::close(fd_);
+  if (file_descriptor_ >= 0) {
+    ::close(file_descriptor_);
   }
 
   data_path_ = std::move(other.data_path_);
   page_size_ = other.page_size_;
   payload_size_ = other.payload_size_;
   next_page_id_ = other.next_page_id_;
-  fd_ = other.fd_;
-  other.fd_ = -1;
+  file_descriptor_ = other.file_descriptor_;
+  other.file_descriptor_ = -1;
   return *this;
 }
 
 Pager::~Pager() {
-  if (fd_ >= 0) {
-    ::close(fd_);
+  if (file_descriptor_ >= 0) {
+    ::close(file_descriptor_);
   }
 }
 
-Pager Pager::Open(const std::filesystem::path &data_path,
-                  std::uint32_t page_size) {
+auto Pager::Open(const std::filesystem::path &data_path,
+                  std::uint32_t page_size) -> Pager {
   if (page_size <= sizeof(PageHeader)) {
     throw std::invalid_argument("page_size too small for header");
   }
@@ -65,29 +67,29 @@ Pager Pager::Open(const std::filesystem::path &data_path,
     std::filesystem::create_directories(data_path.parent_path());
   }
 
-  const int fd =
+  const int file_descriptor =
       ::open(data_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0644);
-  if (fd < 0) {
+  if (file_descriptor < 0) {
     throw std::runtime_error("Failed to open page file");
   }
 
-  const off_t file_size = ::lseek(fd, 0, SEEK_END);
+  const off_t file_size = ::lseek(file_descriptor, 0, SEEK_END);
   if (file_size < 0) {
-    ::close(fd);
+    ::close(file_descriptor);
     throw std::runtime_error("Failed to seek page file");
   }
   if (file_size % page_size != 0) {
-    ::close(fd);
+    ::close(file_descriptor);
     throw std::runtime_error("Page file is corrupt (size mismatch)");
   }
 
   const std::uint64_t next_page =
       file_size == 0 ? 0 : static_cast<std::uint64_t>(file_size) / page_size;
 
-  return Pager{data_path, page_size, fd, next_page};
+  return Pager{data_path, page_size, file_descriptor, next_page};
 }
 
-std::uint64_t Pager::Allocate(PageType type) {
+auto Pager::Allocate(PageType type) -> std::uint64_t {
   const std::uint64_t page_id = next_page_id_++;
   Page page{};
   page.id = page_id;
@@ -112,51 +114,53 @@ void Pager::Write(const Page &page) {
   std::memcpy(buffer.data() + sizeof(PageHeader), page.payload.data(),
               payload_size_);
 
-  const auto written =
-      ::pwrite(fd_, buffer.data(), buffer.size(), OffsetFor(page.id));
-  if (written != static_cast<ssize_t>(buffer.size())) {
+  const auto written = ::pwrite(file_descriptor_, buffer.data(),
+                                buffer.size(),
+                                static_cast<off_t>(OffsetFor(page.id)));
+  if (std::cmp_not_equal(written,
+                         static_cast<ssize_t>(buffer.size()))) {
     throw std::runtime_error("Failed to write page to disk");
   }
 }
 
-std::optional<Page> Pager::Read(std::uint64_t page_id) const {
+auto Pager::Read(std::uint64_t page_id) const -> std::optional<Page> {
   if (page_id >= next_page_id_) {
     return std::nullopt;
   }
 
   std::vector<std::byte> buffer(page_size_);
-  const auto read = ::pread(fd_, buffer.data(), buffer.size(),
-                            OffsetFor(page_id));
-  if (read != static_cast<ssize_t>(buffer.size())) {
+  const auto read = ::pread(file_descriptor_, buffer.data(), buffer.size(),
+                            static_cast<off_t>(OffsetFor(page_id)));
+  if (std::cmp_not_equal(read, static_cast<ssize_t>(buffer.size()))) {
     return std::nullopt;
   }
 
   return ParsePage(buffer, payload_size_);
 }
 
-void Pager::Sync() const { ::fsync(fd_); }
+void Pager::Sync() const { ::fsync(file_descriptor_); }
 
-std::uint64_t Pager::page_count() const noexcept { return next_page_id_; }
+auto Pager::page_count() const noexcept -> std::uint64_t { return next_page_id_; }
 
-std::uint32_t Pager::payload_size() const noexcept { return payload_size_; }
+auto Pager::payload_size() const noexcept -> std::uint32_t { return payload_size_; }
 
-const std::filesystem::path &Pager::data_path() const noexcept {
+auto Pager::data_path() const noexcept -> const std::filesystem::path & {
   return data_path_;
 }
 
-std::uint32_t Pager::page_size() const noexcept { return page_size_; }
+auto Pager::page_size() const noexcept -> std::uint32_t { return page_size_; }
 
-std::uint64_t Pager::OffsetFor(std::uint64_t page_id) const {
+auto Pager::OffsetFor(std::uint64_t page_id) const -> std::uint64_t {
   return page_id * static_cast<std::uint64_t>(page_size_);
 }
 
-std::uint32_t Pager::ComputeCrc(const std::vector<std::byte> &payload) {
+auto Pager::ComputeCrc(const std::vector<std::byte> &payload) -> std::uint32_t {
   return ComputeCrc32(std::span<const std::byte>(payload.data(),
                                                  payload.size()));
 }
 
-Page Pager::ParsePage(const std::vector<std::byte> &buffer,
-                      std::uint32_t payload_size) {
+auto Pager::ParsePage(const std::vector<std::byte> &buffer,
+                      std::uint32_t payload_size) -> Page {
   if (buffer.size() < sizeof(PageHeader) + payload_size) {
     throw std::runtime_error("Corrupt page buffer");
   }

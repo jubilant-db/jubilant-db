@@ -11,10 +11,10 @@
 
 namespace jubilant::meta {
 
-ManifestStore::ManifestStore(std::filesystem::path base_dir)
-    : manifest_path_(std::move(base_dir) / "MANIFEST") {}
+ManifestStore::ManifestStore(const std::filesystem::path& base_dir)
+    : manifest_path_(base_dir / "MANIFEST") {}
 
-ManifestRecord ManifestStore::NewDefault(std::string uuid_seed) const {
+auto ManifestStore::NewDefault(std::string uuid_seed) -> ManifestRecord {
   ManifestRecord manifest{};
   manifest.db_uuid = std::move(uuid_seed);
   manifest.wire_schema = "wire-v1";
@@ -23,23 +23,24 @@ ManifestRecord ManifestStore::NewDefault(std::string uuid_seed) const {
   return manifest;
 }
 
-std::optional<ManifestRecord> ManifestStore::Load() const {
+auto ManifestStore::Load() const -> std::optional<ManifestRecord> {
   if (!std::filesystem::exists(manifest_path_)) {
     return std::nullopt;
   }
 
-  std::ifstream in(manifest_path_, std::ios::binary);
-  if (!in) {
+  std::ifstream manifest_stream(manifest_path_, std::ios::binary);
+  if (!manifest_stream) {
     return std::nullopt;
   }
 
   std::vector<std::byte> buffer(std::filesystem::file_size(manifest_path_));
-  in.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-  if (!in) {
+  manifest_stream.read(reinterpret_cast<char*>(buffer.data()),
+                       static_cast<std::streamsize>(buffer.size()));
+  if (!manifest_stream) {
     return std::nullopt;
   }
 
-  auto* manifest_fb = flatbuffers::GetSizePrefixedRoot<disk::Manifest>(
+  const auto* manifest_fb = flatbuffers::GetSizePrefixedRoot<disk::Manifest>(
       reinterpret_cast<const uint8_t*>(buffer.data()));
   if (manifest_fb == nullptr) {
     return std::nullopt;
@@ -51,7 +52,7 @@ std::optional<ManifestRecord> ManifestStore::Load() const {
   record.page_size = manifest_fb->page_size();
   record.inline_threshold = manifest_fb->inline_threshold();
 
-  const auto uuid_vec = manifest_fb->db_uuid();
+  const auto* const uuid_vec = manifest_fb->db_uuid();
   if (uuid_vec != nullptr) {
     record.db_uuid.assign(reinterpret_cast<const char*>(uuid_vec->Data()),
                           uuid_vec->size());
@@ -78,8 +79,8 @@ std::optional<ManifestRecord> ManifestStore::Load() const {
   return record;
 }
 
-ManifestValidationResult ManifestStore::Validate(
-    const ManifestRecord& manifest) const {
+auto ManifestStore::Validate(const ManifestRecord& manifest)
+    -> ManifestValidationResult {
   ManifestValidationResult result{};
   result.ok = true;
 
@@ -113,7 +114,7 @@ ManifestValidationResult ManifestStore::Validate(
   return result;
 }
 
-bool ManifestStore::Persist(const ManifestRecord& manifest) {
+auto ManifestStore::Persist(const ManifestRecord& manifest) -> bool {
   const auto validation = Validate(manifest);
   if (!validation.ok) {
     return false;

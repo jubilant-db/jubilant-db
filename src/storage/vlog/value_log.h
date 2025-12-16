@@ -21,9 +21,9 @@ class ValueLog {
  public:
   explicit ValueLog(std::filesystem::path base_dir);
 
-  [[nodiscard]] AppendResult Append(const std::vector<std::byte>& data);
-  [[nodiscard]] std::optional<std::vector<std::byte>> Read(
-      const SegmentPointer& pointer) const;
+  [[nodiscard]] auto Append(const std::vector<std::byte>& data) -> AppendResult;
+  [[nodiscard]] static auto Read(const SegmentPointer& pointer)
+      -> std::optional<std::vector<std::byte>>;
   void RunGcCycle();
 
  private:
