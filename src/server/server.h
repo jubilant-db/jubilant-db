@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config/config.h"
 #include "lock/lock_manager.h"
 #include "meta/manifest.h"
 #include "meta/superblock.h"
@@ -27,6 +28,7 @@ namespace jubilant::server {
 class Server {
 public:
   Server(std::filesystem::path base_dir, std::size_t worker_count);
+  Server(const config::Config& config, std::size_t worker_count);
   ~Server();
 
   void Start();

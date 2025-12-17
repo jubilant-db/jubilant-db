@@ -17,7 +17,7 @@ This index is the entry point for engineers and contributors. It groups the spec
 - **CMake/CI setup:** [`ci-setup.md`](ci-setup.md) documents how to reproduce CI locally using presets and helper targets.
 
 ## Clients and tooling
-
+* **Server bootstrap:** `jubildb_server` reads a TOML config, initializes storage, and starts the network adapter + worker pool. Build via `cmake --build --preset dev-debug --target jubildb_server` and launch with `./build/dev-debug/jubildb_server --config ./server.toml [--workers N]`.
 - **Python client prototype:** [`tools/clients/python/`](../tools/clients/python) ships `jubilant_client.py` and the CLI wrapper `jubectl_client.py` for the v0.0.2 envelope. Bytes are provided as hex and base64-encoded on the wire.
 - **CLI usage:** The top-level [`README.md`](../README.md) documents `jubectl init/set/get/del/stats/validate` and links to configuration options.
 
