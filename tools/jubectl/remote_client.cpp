@@ -64,14 +64,14 @@ std::string Base64Encode(std::span<const std::byte> input) {
   return output;
 }
 
-void SetSocketTimeout(int fd, std::chrono::milliseconds timeout) {
-  const struct timeval tv{
+void SetSocketTimeout(int socket_fd, std::chrono::milliseconds timeout) {
+  const struct timeval timeout_value{
       .tv_sec = static_cast<time_t>(timeout.count() / 1000),
       .tv_usec = static_cast<suseconds_t>((timeout.count() % 1000) * 1000),
   };
 
-  if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0 ||
-      setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) != 0) {
+  if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout_value, sizeof(timeout_value)) != 0 ||
+      setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout_value, sizeof(timeout_value)) != 0) {
     throw std::system_error(errno, std::system_category(), "setsockopt failed");
   }
 }
@@ -83,47 +83,47 @@ int OpenSocket(const RemoteTarget& target, std::chrono::milliseconds timeout) {
 
   addrinfo* result = nullptr;
   const auto port_string = std::to_string(target.port);
-  const int rc = getaddrinfo(target.host.c_str(), port_string.c_str(), &hints, &result);
-  if (rc != 0) {
-    throw std::runtime_error(std::string{"getaddrinfo failed: "} + gai_strerror(rc));
+  const int result_code = getaddrinfo(target.host.c_str(), port_string.c_str(), &hints, &result);
+  if (result_code != 0) {
+    throw std::runtime_error(std::string{"getaddrinfo failed: "} + gai_strerror(result_code));
   }
 
-  int fd = -1;
+  int socket_fd = -1;
   for (addrinfo* entry = result; entry != nullptr; entry = entry->ai_next) {
-    fd = socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
-    if (fd < 0) {
+    socket_fd = socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
+    if (socket_fd < 0) {
       continue;
     }
 
     try {
-      SetSocketTimeout(fd, timeout);
-      if (connect(fd, entry->ai_addr, entry->ai_addrlen) == 0) {
+      SetSocketTimeout(socket_fd, timeout);
+      if (connect(socket_fd, entry->ai_addr, entry->ai_addrlen) == 0) {
         break;
       }
     } catch (...) {
-      close(fd);
-      fd = -1;
+      close(socket_fd);
+      socket_fd = -1;
       continue;
     }
 
-    close(fd);
-    fd = -1;
+    close(socket_fd);
+    socket_fd = -1;
   }
 
   freeaddrinfo(result);
 
-  if (fd < 0) {
+  if (socket_fd < 0) {
     throw std::runtime_error("Failed to connect to remote target");
   }
 
-  return fd;
+  return socket_fd;
 }
 
-void WriteAll(int fd, std::string_view buffer) {
+void WriteAll(int socket_fd, std::string_view buffer) {
   std::size_t offset = 0;
   while (offset < buffer.size()) {
     const auto bytes_sent =
-        send(fd, buffer.data() + static_cast<ptrdiff_t>(offset), buffer.size() - offset, 0);
+        send(socket_fd, buffer.data() + static_cast<ptrdiff_t>(offset), buffer.size() - offset, 0);
     if (bytes_sent < 0) {
       if (errno == EINTR) {
         continue;
@@ -137,12 +137,12 @@ void WriteAll(int fd, std::string_view buffer) {
   }
 }
 
-std::string ReadExact(int fd, std::size_t length) {
+std::string ReadExact(int socket_fd, std::size_t length) {
   std::string buffer(length, '\0');
   std::size_t offset = 0;
   while (offset < length) {
     const auto bytes_read =
-        recv(fd, buffer.data() + static_cast<ptrdiff_t>(offset), length - offset, 0);
+        recv(socket_fd, buffer.data() + static_cast<ptrdiff_t>(offset), length - offset, 0);
     if (bytes_read < 0) {
       if (errno == EINTR) {
         continue;
@@ -234,7 +234,11 @@ nlohmann::json SendTransaction(const RemoteTarget& target, const nlohmann::json&
     throw std::invalid_argument("txn_id must be an integer");
   }
   const auto txn_id_value = request["txn_id"].get<std::int64_t>();
-  if (txn_id_value < 0 || static_cast<std::uint64_t>(txn_id_value) > kMaxTxnId) {
+  if (txn_id_value < 0) {
+    throw std::invalid_argument("txn_id must be within 0..2^63-1");
+  }
+  const auto txn_id_unsigned = static_cast<std::uint64_t>(txn_id_value);
+  if (txn_id_unsigned > kMaxTxnId) {
     throw std::invalid_argument("txn_id must be within 0..2^63-1");
   }
   if (!request.contains("operations") || !request["operations"].is_array() ||
@@ -251,23 +255,23 @@ nlohmann::json SendTransaction(const RemoteTarget& target, const nlohmann::json&
     throw std::invalid_argument("request exceeds maximum frame size");
   }
 
-  const std::uint32_t length = static_cast<std::uint32_t>(body.size());
+  const auto length = static_cast<std::uint32_t>(body.size());
   const std::uint32_t network_length = htonl(length);
   std::string frame;
   frame.reserve(sizeof(network_length) + body.size());
   frame.append(reinterpret_cast<const char*>(&network_length), sizeof(network_length));
   frame.append(body);
 
-  const int fd = OpenSocket(target, timeout);
+  const int socket_fd = OpenSocket(target, timeout);
   struct FdDeleter {
-    void operator()(int* ptr) const {
-      if (ptr && *ptr >= 0) {
-        close(*ptr);
+    void operator()(const int* fd_ptr) const {
+      if (fd_ptr != nullptr && *fd_ptr >= 0) {
+        close(*fd_ptr);
       }
-      delete ptr;
+      delete fd_ptr;
     }
   };
-  const auto closer = std::unique_ptr<int, FdDeleter>(new int(fd));
+  const auto closer = std::unique_ptr<const int, FdDeleter>(new int(socket_fd));
 
   WriteAll(*closer, frame);
 

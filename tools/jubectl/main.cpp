@@ -127,10 +127,9 @@ std::chrono::milliseconds ParseTimeoutMs(std::string_view value) {
 ParsedArgs ParseArguments(int argc, char** argv) {
   ParsedArgs parsed{};
 
-  bool saw_command = false;
   for (int i = 1; i < argc; ++i) {
     std::string_view arg{argv[i]};
-    if (!saw_command && arg == "--remote") {
+    if (arg == "--remote") {
       if (i + 1 >= argc) {
         throw std::invalid_argument("--remote requires host:port");
       }
@@ -138,14 +137,14 @@ ParsedArgs ParseArguments(int argc, char** argv) {
       parsed.remote.target = jubilant::cli::ParseRemoteTarget(argv[++i]);
       continue;
     }
-    if (!saw_command && arg == "--txn-id") {
+    if (arg == "--txn-id") {
       if (i + 1 >= argc) {
         throw std::invalid_argument("--txn-id requires a value");
       }
       parsed.remote.txn_id = ParseTxnIdArg(argv[++i]);
       continue;
     }
-    if (!saw_command && arg == "--timeout-ms") {
+    if (arg == "--timeout-ms") {
       if (i + 1 >= argc) {
         throw std::invalid_argument("--timeout-ms requires a value");
       }
@@ -153,7 +152,6 @@ ParsedArgs ParseArguments(int argc, char** argv) {
       continue;
     }
 
-    saw_command = true;
     parsed.positionals.assign(argv + i, argv + argc);
     break;
   }
@@ -194,15 +192,15 @@ nlohmann::json BuildRemoteOperation(std::string_view type, std::string_view key,
     throw std::invalid_argument("key must be non-empty");
   }
 
-  nlohmann::json op{{"type", type}, {"key", key}};
+  nlohmann::json operation{{"type", type}, {"key", key}};
   if (type == "set") {
     if (record_args == nullptr) {
       throw std::invalid_argument("set operations require a value");
     }
     const auto record = BuildRecord(*record_args);
-    op["value"] = jubilant::cli::RecordValueToEnvelope(record);
+    operation["value"] = jubilant::cli::RecordValueToEnvelope(record);
   }
-  return op;
+  return operation;
 }
 
 nlohmann::json BuildRemoteRequest(const RemoteOptions& remote,
@@ -423,7 +421,7 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
 
-      const auto request_json = LoadJsonFromFile(std::filesystem::path{parsed.positionals[1]});
+      auto request_json = LoadJsonFromFile(std::filesystem::path{parsed.positionals[1]});
       const auto normalized = NormalizeTransactionRequest(std::move(request_json), parsed.remote);
       const auto response =
           jubilant::cli::SendTransaction(parsed.remote.target, normalized, parsed.remote.timeout);
