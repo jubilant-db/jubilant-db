@@ -164,6 +164,25 @@ target_compile_options(jubectl
 )
 jubildb_enable_clang_tidy(jubectl)
 
+add_executable(jubildb_server
+  src/server/main.cpp
+)
+
+target_link_libraries(jubildb_server
+  PRIVATE
+    jubildb
+)
+
+target_compile_options(jubildb_server
+  PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+if(JUBILANT_CLANG_TIDY_COMMAND)
+  set_property(TARGET jubildb_server PROPERTY CXX_CLANG_TIDY "${JUBILANT_CLANG_TIDY_COMMAND}")
+endif()
+
 # Tests ------------------------------------------------------------------------
 if(JUBILANT_BUILD_TESTS)
   enable_testing()

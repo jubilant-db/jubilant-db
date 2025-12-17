@@ -1,16 +1,85 @@
 #include "server/server.h"
 
+#include <filesystem>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 
 namespace jubilant::server {
 
+namespace {
+
+std::string GenerateUuidLikeString() {
+  std::mt19937_64 rng(std::random_device{}());
+  std::uniform_int_distribution<std::uint64_t> dist;
+
+  auto to_hex = [](std::uint64_t value) {
+    std::string out(16, '0');
+    static constexpr char kHex[] = "0123456789abcdef";
+    for (int i = 15; i >= 0; --i) {
+      out[i] = kHex[value & 0xF];
+      value >>= 4U;
+    }
+    return out;
+  };
+
+  return to_hex(dist(rng)) + to_hex(dist(rng));
+}
+
+std::size_t ResolveWorkerCount(std::size_t requested) {
+  if (requested > 0) {
+    return requested;
+  }
+  const auto hardware = std::thread::hardware_concurrency();
+  return hardware > 0 ? static_cast<std::size_t>(hardware) : 1U;
+}
+
+meta::ManifestRecord LoadOrCreateManifest(meta::ManifestStore& manifest_store,
+                                          const config::Config& config) {
+  auto manifest = manifest_store.Load();
+  if (manifest.has_value()) {
+    return *manifest;
+  }
+
+  manifest = meta::ManifestStore::NewDefault(GenerateUuidLikeString());
+  manifest->page_size = config.page_size;
+  manifest->inline_threshold = config.inline_threshold;
+
+  if (!manifest_store.Persist(*manifest)) {
+    throw std::runtime_error("Failed to persist MANIFEST");
+  }
+  return *manifest;
+}
+
+meta::SuperBlock LoadOrCreateSuperblock(meta::SuperBlockStore& superblock_store,
+                                        meta::SuperBlock superblock,
+                                        const storage::btree::BTree& btree) {
+  if (superblock.generation != 0) {
+    return superblock;
+  }
+
+  superblock.root_page_id = btree.root_page_id();
+  if (superblock_store.WriteNext(superblock)) {
+    const auto refreshed = superblock_store.LoadActive();
+    if (refreshed.has_value()) {
+      return *refreshed;
+    }
+  }
+  return superblock;
+}
+
+} // namespace
+
 Server::Server(std::filesystem::path base_dir, std::size_t worker_count)
-    : base_dir_(std::move(base_dir)), worker_count_(worker_count), wal_manager_(base_dir_),
-      manifest_store_(base_dir_), superblock_store_(base_dir_) {
-  manifest_record_ =
-      manifest_store_.Load().value_or(meta::ManifestStore::NewDefault("server-bootstrap"));
+    : Server(config::ConfigLoader::Default(std::move(base_dir)), worker_count) {}
+
+Server::Server(const config::Config& config, std::size_t worker_count)
+    : base_dir_(config.db_path), worker_count_(ResolveWorkerCount(worker_count)),
+      wal_manager_(base_dir_), manifest_store_(base_dir_), superblock_store_(base_dir_) {
+  std::filesystem::create_directories(base_dir_);
+  manifest_record_ = LoadOrCreateManifest(manifest_store_, config);
   superblock_ = superblock_store_.LoadActive().value_or(meta::SuperBlock{});
   pager_.emplace(storage::Pager::Open(base_dir_ / "data.pages", manifest_record_.page_size));
   value_log_.emplace(base_dir_ / "vlog");
@@ -19,6 +88,7 @@ Server::Server(std::filesystem::path base_dir, std::size_t worker_count)
                                     .value_log = &value_log_.value(),
                                     .inline_threshold = manifest_record_.inline_threshold,
                                     .root_hint = superblock_.root_page_id});
+  superblock_ = LoadOrCreateSuperblock(superblock_store_, superblock_, btree_.value());
 }
 
 Server::~Server() {
