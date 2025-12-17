@@ -3,8 +3,9 @@
 Thanks for helping improve Jubilant DB! The following practices keep changes moving smoothly:
 
 ## Tooling expectations
-- **clang-tidy is mandatory.** Resolve all clang-tidy findings. You can enable tidy locally with the provided CMake preset:
-  - Configure/build with `cmake --preset dev-debug-tidy` (or the matching release preset) so diagnostics are emitted during compilation.
+- **clang-tidy is mandatory.** Resolve all clang-tidy findings. Configure with a tidy preset so clang-tidy runs against every target (library, CLI, and tests) during compilation:
+  - `cmake --preset dev-debug-tidy`
+  - `cmake --build --preset dev-debug-tidy`
 - **clang-format is required.** Run `cmake --build --preset dev-debug --target clang-format` before sending a pull request. CI enforces formatting but will fail instead of auto-fixing.
 - CMake presets drive both local and CI builds. Use `cmake --preset dev-debug` for regular builds/tests and the tidy presets for linting.
 
