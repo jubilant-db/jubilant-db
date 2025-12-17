@@ -276,12 +276,13 @@ void NetworkServer::HandleConnection(const std::shared_ptr<Connection>& connecti
     if (!request.has_value()) {
       break;
     }
+    const auto& txn_request = *request;
 
-    if (!RegisterTransaction(connection, request->id)) {
+    if (!RegisterTransaction(connection, txn_request.id)) {
       TransactionResult duplicate{};
-      duplicate.id = request->id;
+      duplicate.id = txn_request.id;
       duplicate.state = txn::TransactionState::kAborted;
-      for (const auto& operation : request->operations) {
+      for (const auto& operation : txn_request.operations) {
         OperationResult operation_result{};
         operation_result.type = operation.type;
         operation_result.key = operation.key;
@@ -293,11 +294,11 @@ void NetworkServer::HandleConnection(const std::shared_ptr<Connection>& connecti
       continue;
     }
 
-    if (!server_.SubmitTransaction(*request)) {
+    if (!server_.SubmitTransaction(txn_request)) {
       TransactionResult rejected{};
-      rejected.id = request->id;
+      rejected.id = txn_request.id;
       rejected.state = txn::TransactionState::kAborted;
-      for (const auto& operation : request->operations) {
+      for (const auto& operation : txn_request.operations) {
         OperationResult operation_result{};
         operation_result.type = operation.type;
         operation_result.key = operation.key;
@@ -305,7 +306,7 @@ void NetworkServer::HandleConnection(const std::shared_ptr<Connection>& connecti
       }
       const auto response = EncodeResponse(rejected).dump();
       WriteFrame(connection, response);
-      ClearTransaction(connection, request->id);
+      ClearTransaction(connection, txn_request.id);
     }
   }
 
