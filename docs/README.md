@@ -18,6 +18,7 @@ This index standardizes where to find design, implementation, and roadmap materi
   python tools/clients/python/jubectl_client.py --host 127.0.0.1 --port 6767 get alpha
   ```
   Bytes are provided as hex on the CLI and base64-encoded on the wire per [`txn-wire-v0.0.2.md`](txn-wire-v0.0.2.md).
+* **Server bootstrap:** `jubildb_server` reads a TOML config, initializes storage, and starts the network adapter + worker pool. Build via `cmake --build --preset dev-debug --target jubildb_server` and launch with `./build/dev-debug/jubildb_server --config ./server.toml [--workers N]`.
 
 ## Milestones and status
 

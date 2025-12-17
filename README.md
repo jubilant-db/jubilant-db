@@ -44,6 +44,20 @@ python tools/clients/python/jubectl_client.py --host 127.0.0.1 --port 6767 del a
 
 Byte values are supplied as hex strings and base64-encoded on the wire; the CLI accepts an optional `--txn-id` for deterministic testing.
 
+## Server bootstrap (v0.0.2)
+
+The `jubildb_server` binary loads a TOML configuration, initializes storage, starts the worker pool,
+and binds the network adapter described in [`docs/txn-wire-v0.0.2.md`](docs/txn-wire-v0.0.2.md).
+
+```sh
+cmake --build --preset dev-debug --target jubildb_server
+./build/dev-debug/jubildb_server --config ./server.toml --workers 4
+```
+
+`--config` points to the TOML file consumed by `ConfigLoader`; `--workers` defaults to the number
+of hardware threads when omitted. The listener binds to `listen_address`/`listen_port` from the
+config and advertises the bound port after any OS reassignment.
+
 ## Configuration
 
 `jubildb` instances read TOML configuration files through `ConfigLoader` with sensible defaults for every field except the
@@ -67,7 +81,8 @@ listen_port = 7777
 ```
 
 Defaults mirror the current implementation: 4 KiB pages, 1 KiB inline threshold, a 64 MiB cache, 5 ms max group-commit latency,
-and `127.0.0.1:6767` for the listening socket.
+and `127.0.0.1:6767` for the listening socket. The `jubildb_server` bootstrap uses the same file to seed on-disk metadata (page
+size and inline threshold) on first run and to determine the binding address for the network adapter.
 
 ## Build + contribute
 

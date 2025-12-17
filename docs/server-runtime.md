@@ -14,6 +14,14 @@ and concurrency mechanics testable while the wire protocol and full transaction 
 * **Server (src/server/server.h):** Owns the shared storage state, worker pool, and receiver. New requests flow through
   `SubmitTransaction`, and callers can poll processed results via `DrainCompleted()`.
 
+## Bootstrap entry point
+
+`src/server/main.cpp` wires configuration loading, storage initialization, the worker pool, and the network adapter
+into a runnable binary (`jubildb_server`). Pass `--config <path>` to point at a TOML file parsed by `ConfigLoader`;
+`--workers` overrides the default of one thread per hardware core, and `--backlog` tunes the pending connection queue
+for the TCP listener. The bootstrap persists a MANIFEST with configured page sizing on first run and stamps a superblock
+if none exists before starting the adapter.
+
 ## Concurrency expectations
 
 * Per-key locks are enforced through `LockManager`; BTree mutations additionally take a shared mutex to serialize map access.
