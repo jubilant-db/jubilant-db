@@ -3,11 +3,14 @@
 #include "storage/simple_store.h"
 
 #include <algorithm>
+#include <arpa/inet.h>
 #include <array>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
+#include <cstddef>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <filesystem>
 #include <gtest/gtest.h>
@@ -17,6 +20,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -39,6 +43,30 @@ struct IntegrationScenario {
   std::string name;
   bool delete_missing_first{false};
   bool use_large_value{false};
+};
+
+enum class ClientVariant : std::uint8_t { kPython, kJubectl };
+
+struct ClientEndpoints {
+  std::filesystem::path python_client_dir;
+  std::filesystem::path jubectl_binary;
+};
+
+struct ClientAction {
+  ClientVariant client;
+  std::string verb;
+  std::string key;
+  std::string value;
+  std::string value_type;
+  bool expect_success{true};
+  std::optional<std::string> expect_value;
+};
+
+struct ActionMatrix {
+  std::string name;
+  std::string primary_key;
+  std::vector<ClientAction> actions;
+  std::optional<std::string> expected_terminal_value;
 };
 
 std::string ScenarioName(const testing::TestParamInfo<IntegrationScenario>& info) {
@@ -201,6 +229,29 @@ CommandResult RunCommand(const std::vector<std::string>& args,
   return result;
 }
 
+CommandResult RunPythonClientCommand(const std::filesystem::path& client_dir,
+                                     const std::vector<std::string>& extra_args,
+                                     std::uint16_t port) {
+  const auto executable = PythonExecutable();
+  const auto script = client_dir / "jubectl_client.py";
+
+  std::vector<std::string> args{executable,  script.string(), "--host",
+                                "127.0.0.1", "--port",        std::to_string(port)};
+  args.insert(args.end(), extra_args.begin(), extra_args.end());
+
+  return RunCommand(args, client_dir,
+                    {{"PYTHONPATH", client_dir.string()}, {"PYTHONUNBUFFERED", "1"}});
+}
+
+CommandResult RunJubectlRemoteCommand(const std::filesystem::path& binary,
+                                      const std::vector<std::string>& extra_args,
+                                      std::uint16_t port) {
+  std::vector<std::string> args{binary.string(), "--remote", "127.0.0.1:" + std::to_string(port),
+                                "--timeout-ms", "2000"};
+  args.insert(args.end(), extra_args.begin(), extra_args.end());
+  return RunCommand(args, std::filesystem::current_path());
+}
+
 nlohmann::json ParseJson(const std::string& payload) {
   const auto parsed = nlohmann::json::parse(payload, nullptr, false);
   if (parsed.is_discarded()) {
@@ -212,18 +263,13 @@ nlohmann::json ParseJson(const std::string& payload) {
 nlohmann::json RunPythonClient(const std::filesystem::path& client_dir, std::string_view command,
                                std::string_view key, const std::string& value,
                                std::string_view value_type, std::uint16_t port) {
-  const auto executable = PythonExecutable();
-  const auto script = client_dir / "jubectl_client.py";
-  std::vector<std::string> args{executable,           script.string(), "--host",
-                                "127.0.0.1",          "--port",        std::to_string(port),
-                                std::string{command}, std::string{key}};
+  std::vector<std::string> args{std::string{command}, std::string{key}};
   if (!value_type.empty()) {
     args.emplace_back(value_type);
     args.emplace_back(value);
   }
 
-  const auto result = RunCommand(args, client_dir,
-                                 {{"PYTHONPATH", client_dir.string()}, {"PYTHONUNBUFFERED", "1"}});
+  const auto result = RunPythonClientCommand(client_dir, args, port);
   if (result.exit_code != 0) {
     throw std::runtime_error(std::string{"Python client failed"} +
                              (result.timed_out ? " (timed out)" : "") + ": " + result.output);
@@ -234,20 +280,82 @@ nlohmann::json RunPythonClient(const std::filesystem::path& client_dir, std::str
 nlohmann::json RunJubectlRemote(const std::filesystem::path& binary, std::string_view command,
                                 std::string_view key, const std::string& value,
                                 std::string_view value_type, std::uint16_t port) {
-  std::vector<std::string> args{binary.string(), "--remote", "127.0.0.1:" + std::to_string(port),
-                                "--timeout-ms",  "2000",     std::string{command},
-                                std::string{key}};
+  std::vector<std::string> args{std::string{command}, std::string{key}};
   if (!value_type.empty()) {
     args.emplace_back(value_type);
     args.emplace_back(value);
   }
 
-  const auto result = RunCommand(args, std::filesystem::current_path());
+  const auto result = RunJubectlRemoteCommand(binary, args, port);
   if (result.exit_code != 0) {
     throw std::runtime_error(std::string{"jubectl failed"} +
                              (result.timed_out ? " (timed out)" : "") + ": " + result.output);
   }
   return ParseJson(result.output);
+}
+
+CommandResult SendRawFrameToServer(std::uint16_t port, std::string_view payload) {
+  CommandResult result{};
+
+  const int socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_fd < 0) {
+    result.exit_code = errno;
+    result.output = "socket failed";
+    return result;
+  }
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+  if (::connect(socket_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+    result.exit_code = errno;
+    result.output = "connect failed";
+    ::close(socket_fd);
+    return result;
+  }
+
+  const auto payload_length = static_cast<std::uint32_t>(payload.size());
+  std::array<std::byte, 4> prefix{};
+  const auto network_length = htonl(payload_length);
+  std::memcpy(prefix.data(), &network_length, sizeof(network_length));
+
+  if (::send(socket_fd, prefix.data(), prefix.size(), 0) < 0) {
+    result.exit_code = errno;
+    result.output = "send failed";
+    ::close(socket_fd);
+    return result;
+  }
+
+  if (!payload.empty()) {
+    if (::send(socket_fd, payload.data(), payload.size(), 0) < 0) {
+      result.exit_code = errno;
+      result.output = "send payload failed";
+      ::close(socket_fd);
+      return result;
+    }
+  }
+
+  std::array<char, 4096> buffer{};
+  const auto received = ::recv(socket_fd, buffer.data(), buffer.size(), 0);
+  if (received > 0) {
+    result.output.assign(buffer.data(), static_cast<std::size_t>(received));
+  }
+
+  ::shutdown(socket_fd, SHUT_RDWR);
+  ::close(socket_fd);
+  return result;
+}
+
+nlohmann::json ExecuteClientAction(const ClientAction& action, const ClientEndpoints& endpoints,
+                                   std::uint16_t port) {
+  if (action.client == ClientVariant::kPython) {
+    return RunPythonClient(endpoints.python_client_dir, action.verb, action.key, action.value,
+                           action.value_type, port);
+  }
+  return RunJubectlRemote(endpoints.jubectl_binary, action.verb, action.key, action.value,
+                          action.value_type, port);
 }
 
 class DualClientIntegrationTest : public ::testing::TestWithParam<IntegrationScenario> {
@@ -293,6 +401,146 @@ protected:
   std::unique_ptr<Server> core_server_;
   std::unique_ptr<NetworkServer> network_server_;
 };
+
+TEST_F(DualClientIntegrationTest, InterleavedClientMatricesMaintainOrdering) {
+  const auto client_dir = FindPythonClientDir();
+  ASSERT_FALSE(client_dir.empty()) << "Python client bundle not found";
+  const auto jubectl = FindJubectlBinary();
+  ASSERT_FALSE(jubectl.empty()) << "jubectl binary not found";
+  const ClientEndpoints endpoints{.python_client_dir = client_dir, .jubectl_binary = jubectl};
+
+  const auto suffix = std::to_string(std::random_device{}());
+  const std::vector<ActionMatrix> matrices{{.name = "DeleteThenReinsert",
+                                            .primary_key = "matrix-delete-" + suffix,
+                                            .actions = {{.client = ClientVariant::kPython,
+                                                         .verb = "set",
+                                                         .key = "matrix-delete-" + suffix,
+                                                         .value = "python-writes",
+                                                         .value_type = "string"},
+                                                        {.client = ClientVariant::kJubectl,
+                                                         .verb = "get",
+                                                         .key = "matrix-delete-" + suffix,
+                                                         .value_type = "",
+                                                         .expect_value = "python-writes"},
+                                                        {.client = ClientVariant::kJubectl,
+                                                         .verb = "del",
+                                                         .key = "matrix-delete-" + suffix,
+                                                         .value_type = "",
+                                                         .expect_success = true},
+                                                        {.client = ClientVariant::kPython,
+                                                         .verb = "get",
+                                                         .key = "matrix-delete-" + suffix,
+                                                         .value_type = "",
+                                                         .expect_success = false},
+                                                        {.client = ClientVariant::kPython,
+                                                         .verb = "set",
+                                                         .key = "matrix-delete-" + suffix,
+                                                         .value = "reinserted-from-python",
+                                                         .value_type = "string"},
+                                                        {.client = ClientVariant::kJubectl,
+                                                         .verb = "get",
+                                                         .key = "matrix-delete-" + suffix,
+                                                         .value_type = "",
+                                                         .expect_value = "reinserted-from-python"}},
+                                            .expected_terminal_value = "reinserted-from-python"},
+                                           {.name = "OverwriteOrdering",
+                                            .primary_key = "matrix-overwrite-" + suffix,
+                                            .actions = {{.client = ClientVariant::kJubectl,
+                                                         .verb = "set",
+                                                         .key = "matrix-overwrite-" + suffix,
+                                                         .value = "cli-first",
+                                                         .value_type = "string"},
+                                                        {.client = ClientVariant::kPython,
+                                                         .verb = "set",
+                                                         .key = "matrix-overwrite-" + suffix,
+                                                         .value = "python-second",
+                                                         .value_type = "string"},
+                                                        {.client = ClientVariant::kJubectl,
+                                                         .verb = "set",
+                                                         .key = "matrix-overwrite-" + suffix,
+                                                         .value = "cli-third",
+                                                         .value_type = "string"},
+                                                        {.client = ClientVariant::kPython,
+                                                         .verb = "get",
+                                                         .key = "matrix-overwrite-" + suffix,
+                                                         .value_type = "",
+                                                         .expect_value = "cli-third"}},
+                                            .expected_terminal_value = "cli-third"}};
+
+  for (const auto& matrix : matrices) {
+    SCOPED_TRACE(matrix.name);
+    for (const auto& action : matrix.actions) {
+      const auto response = ExecuteClientAction(action, endpoints, port());
+      ASSERT_EQ(response.at("state"), "committed");
+      ASSERT_FALSE(response.at("operations").empty());
+      const auto& operation_result = response.at("operations")[0];
+      EXPECT_EQ(operation_result.at("success").get<bool>(), action.expect_success);
+      if (action.expect_value.has_value()) {
+        ASSERT_TRUE(operation_result.contains("value"));
+        EXPECT_EQ(operation_result.at("value").at("data").get<std::string>(), *action.expect_value);
+      } else if (action.verb == "get" && action.expect_success) {
+        EXPECT_TRUE(operation_result.contains("value"));
+      }
+    }
+
+    auto store = jubilant::storage::SimpleStore::Open(temp_dir_);
+    const auto persisted = store.Get(matrix.primary_key);
+    if (matrix.expected_terminal_value.has_value()) {
+      if (!persisted.has_value()) {
+        ADD_FAILURE() << "Expected key " << matrix.primary_key << " to exist for " << matrix.name;
+      } else {
+        const auto& persisted_value = *persisted;
+        ASSERT_TRUE(std::holds_alternative<std::string>(persisted_value.value));
+        EXPECT_EQ(std::get<std::string>(persisted_value.value), *matrix.expected_terminal_value);
+      }
+    } else {
+      EXPECT_FALSE(persisted.has_value());
+    }
+  }
+}
+
+TEST_F(DualClientIntegrationTest, InvalidCommandsSurfaceErrorsWithoutCorruption) {
+  const auto client_dir = FindPythonClientDir();
+  ASSERT_FALSE(client_dir.empty()) << "Python client bundle not found";
+  const auto jubectl = FindJubectlBinary();
+  ASSERT_FALSE(jubectl.empty()) << "jubectl binary not found";
+
+  const std::string invalid_key = "invalid-matrix-" + std::to_string(std::random_device{}());
+
+  const auto bad_python = RunPythonClientCommand(
+      client_dir, {std::string{"set"}, invalid_key, "bytes", "zz-not-hex"}, port());
+  EXPECT_NE(bad_python.exit_code, 0);
+  EXPECT_NE(bad_python.output.find("Error"), std::string::npos);
+
+  const auto malformed_payload = SendRawFrameToServer(
+      port(), R"({"txn_id":42,"operations":[{"type":"unknown","key":")" + invalid_key + R"("}]})");
+  EXPECT_EQ(malformed_payload.exit_code, 0);
+  EXPECT_TRUE(malformed_payload.output.empty());
+
+  auto store = jubilant::storage::SimpleStore::Open(temp_dir_);
+  EXPECT_EQ(store.size(), 0U);
+
+  const auto recovery =
+      RunPythonClient(client_dir, "set", invalid_key, "clean-value", "string", port());
+  ASSERT_EQ(recovery.at("state"), "committed");
+  const auto confirmation = RunJubectlRemote(jubectl, "get", invalid_key, "", "", port());
+  ASSERT_EQ(confirmation.at("state"), "committed");
+  ASSERT_FALSE(confirmation.at("operations").empty());
+  const auto& confirmation_op = confirmation.at("operations")[0];
+  ASSERT_TRUE(confirmation_op.at("success").get<bool>());
+  ASSERT_TRUE(confirmation_op.contains("value"));
+  EXPECT_EQ(confirmation_op.at("value").at("data").get<std::string>(), "clean-value");
+
+  auto reloaded = jubilant::storage::SimpleStore::Open(temp_dir_);
+  const auto final_record = reloaded.Get(invalid_key);
+  if (!final_record.has_value()) {
+    FAIL() << "Expected " << invalid_key << " to persist clean-value";
+    return;
+  }
+  const auto& final_record_value = *final_record;
+  ASSERT_TRUE(std::holds_alternative<std::string>(final_record_value.value));
+  EXPECT_EQ(std::get<std::string>(final_record_value.value), "clean-value");
+}
 
 TEST_P(DualClientIntegrationTest, PythonAndJubectlStayConsistent) {
   const auto& scenario = GetParam();
