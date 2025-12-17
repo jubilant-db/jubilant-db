@@ -32,6 +32,8 @@ void PrintUsage(const char* binary) {
 
 std::optional<CliOptions> ParseArgs(int argc, char** argv) {
   CliOptions options{};
+  bool help_requested = false;
+  bool invalid_args = false;
 
   for (int i = 1; i < argc; ++i) {
     const std::string arg{argv[i]};
@@ -52,12 +54,17 @@ std::optional<CliOptions> ParseArgs(int argc, char** argv) {
         return std::nullopt;
       }
     } else if (arg == "--help" || arg == "-h") {
-      PrintUsage(argv[0]);
-      return std::nullopt;
+      help_requested = true;
+      break;
     } else {
-      PrintUsage(argv[0]);
-      return std::nullopt;
+      invalid_args = true;
+      break;
     }
+  }
+
+  if (help_requested || invalid_args) {
+    PrintUsage(argv[0]);
+    return std::nullopt;
   }
 
   if (options.config_path.empty()) {

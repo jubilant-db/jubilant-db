@@ -171,16 +171,16 @@ nlohmann::json ParseJson(const std::string& payload) {
 }
 
 nlohmann::json RunPythonClient(const std::filesystem::path& client_dir, std::string_view command,
-                               std::string_view key, std::string_view value_type,
-                               const std::string& value, std::uint16_t port) {
+                               std::string_view key, const std::string& value,
+                               std::string_view value_type, std::uint16_t port) {
   const auto executable = PythonExecutable();
   const auto script = client_dir / "jubectl_client.py";
   std::vector<std::string> args{executable,           script.string(), "--host",
                                 "127.0.0.1",          "--port",        std::to_string(port),
                                 std::string{command}, std::string{key}};
   if (!value_type.empty()) {
-    args.push_back(std::string{value_type});
-    args.push_back(value);
+    args.emplace_back(value_type);
+    args.emplace_back(value);
   }
 
   const auto result = RunCommand(args, client_dir,
@@ -192,14 +192,14 @@ nlohmann::json RunPythonClient(const std::filesystem::path& client_dir, std::str
 }
 
 nlohmann::json RunJubectlRemote(const std::filesystem::path& binary, std::string_view command,
-                                std::string_view key, std::string_view value_type,
-                                const std::string& value, std::uint16_t port) {
+                                std::string_view key, const std::string& value,
+                                std::string_view value_type, std::uint16_t port) {
   std::vector<std::string> args{binary.string(), "--remote", "127.0.0.1:" + std::to_string(port),
                                 "--timeout-ms",  "2000",     std::string{command},
                                 std::string{key}};
   if (!value_type.empty()) {
-    args.push_back(std::string{value_type});
-    args.push_back(value);
+    args.emplace_back(value_type);
+    args.emplace_back(value);
   }
 
   const auto result = RunCommand(args, std::filesystem::current_path());
@@ -254,7 +254,7 @@ protected:
 };
 
 TEST_P(DualClientIntegrationTest, PythonAndJubectlStayConsistent) {
-  const auto scenario = GetParam();
+  const auto& scenario = GetParam();
   const auto client_dir = FindPythonClientDir();
   ASSERT_FALSE(client_dir.empty()) << "Python client bundle not found";
   const auto jubectl = FindJubectlBinary();
@@ -277,7 +277,7 @@ TEST_P(DualClientIntegrationTest, PythonAndJubectlStayConsistent) {
   }
 
   const auto python_set =
-      RunPythonClient(client_dir, "set", primary_key, "string", initial_value, port());
+      RunPythonClient(client_dir, "set", primary_key, initial_value, "string", port());
   ASSERT_EQ(python_set.at("state"), "committed");
   ASSERT_TRUE(python_set.at("operations")[0].at("success").get<bool>());
 
@@ -288,7 +288,7 @@ TEST_P(DualClientIntegrationTest, PythonAndJubectlStayConsistent) {
   EXPECT_EQ(python_get_op.at("value").at("data").get<std::string>(), initial_value);
 
   const auto jubectl_set =
-      RunJubectlRemote(jubectl, "set", primary_key, "string", overwrite_value, port());
+      RunJubectlRemote(jubectl, "set", primary_key, overwrite_value, "string", port());
   ASSERT_EQ(jubectl_set.at("state"), "committed");
   ASSERT_TRUE(jubectl_set.at("operations")[0].at("success").get<bool>());
 
@@ -312,7 +312,7 @@ TEST_P(DualClientIntegrationTest, PythonAndJubectlStayConsistent) {
   EXPECT_FALSE(python_after_delete.at("operations")[0].at("success").get<bool>());
 
   const auto python_reinsert =
-      RunPythonClient(client_dir, "set", primary_key, "string", reinsertion_value, port());
+      RunPythonClient(client_dir, "set", primary_key, reinsertion_value, "string", port());
   ASSERT_EQ(python_reinsert.at("state"), "committed");
   ASSERT_TRUE(python_reinsert.at("operations")[0].at("success").get<bool>());
 
@@ -327,9 +327,13 @@ TEST_P(DualClientIntegrationTest, PythonAndJubectlStayConsistent) {
 
   auto reloaded_store = jubilant::storage::SimpleStore::Open(temp_dir_);
   const auto reloaded_record = reloaded_store.Get(primary_key);
-  ASSERT_TRUE(reloaded_record.has_value());
-  ASSERT_TRUE(std::holds_alternative<std::string>(reloaded_record->value));
-  EXPECT_EQ(std::get<std::string>(reloaded_record->value), reinsertion_value);
+  if (!reloaded_record.has_value()) {
+    FAIL() << "Reloaded store missing primary key";
+    return;
+  }
+  const auto& stored_record = *reloaded_record;
+  ASSERT_TRUE(std::holds_alternative<std::string>(stored_record.value));
+  EXPECT_EQ(std::get<std::string>(stored_record.value), reinsertion_value);
   EXPECT_FALSE(reloaded_store.Get(missing_key).has_value());
   EXPECT_EQ(reloaded_store.size(), 1U);
 
