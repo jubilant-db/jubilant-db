@@ -23,6 +23,7 @@ using jubilant::server::Worker;
 using jubilant::storage::Pager;
 using jubilant::storage::btree::Record;
 using jubilant::storage::vlog::ValueLog;
+using jubilant::txn::BuildTransactionRequest;
 using jubilant::txn::Operation;
 using jubilant::txn::OperationType;
 using jubilant::txn::TransactionRequest;
@@ -76,7 +77,7 @@ TEST(WorkerTest, ProcessesOperationsAndEmitsResults) {
   Operation get_op{.type = OperationType::kGet, .key = "alpha", .value = std::nullopt};
   Operation delete_op{.type = OperationType::kDelete, .key = "alpha", .value = std::nullopt};
 
-  TransactionRequest request{.id = 1, .operations = {set_op, get_op, delete_op}};
+  TransactionRequest request = BuildTransactionRequest(1, {set_op, get_op, delete_op});
   ASSERT_TRUE(receiver.Enqueue(request));
 
   std::unique_lock results_lock{results_mutex};
@@ -114,7 +115,7 @@ TEST(ServerTest, SubmitsAndDrainsTransactions) {
   Record record{};
   record.value = static_cast<std::int64_t>(99);
   Operation set_op{.type = OperationType::kSet, .key = "key", .value = record};
-  TransactionRequest request{.id = 7, .operations = {set_op}};
+  TransactionRequest request = BuildTransactionRequest(7, {set_op});
 
   ASSERT_TRUE(server.SubmitTransaction(request));
 

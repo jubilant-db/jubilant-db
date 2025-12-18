@@ -11,6 +11,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -18,6 +19,7 @@ namespace jubilant::server {
 
 struct OperationResult {
   txn::OperationType type{txn::OperationType::kGet};
+  std::uint32_t key_id{0};
   std::string key;
   bool success{false};
   std::optional<storage::btree::Record> value;
@@ -62,11 +64,12 @@ private:
 
   void Run();
   TransactionResult Process(const txn::TransactionRequest& request);
-  void ApplyRead(const txn::Operation& operation, txn::TransactionContext& context,
-                 TransactionResult& result);
-  void ApplyWrite(const txn::Operation& operation, txn::TransactionContext& context,
-                  TransactionResult& result);
-  void ApplyDelete(const txn::Operation& operation, TransactionResult& result);
+  void ApplyRead(const txn::Operation& operation, std::string_view key,
+                 txn::TransactionContext& context, TransactionResult& result);
+  void ApplyWrite(const txn::Operation& operation, std::string_view key,
+                  txn::TransactionContext& context, TransactionResult& result);
+  void ApplyDelete(const txn::Operation& operation, std::string_view key,
+                   TransactionResult& result);
 
   std::string name_;
   TransactionReceiver& receiver_;

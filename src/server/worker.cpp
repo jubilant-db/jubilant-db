@@ -75,16 +75,29 @@ TransactionResult Worker::Process(const txn::TransactionRequest& request) {
 
   txn::TransactionContext context{request.id};
   for (const auto& operation : request.operations) {
+    const auto key = request.ResolveKey(operation);
+    if (!key.has_value()) {
+      result.state = txn::TransactionState::kAborted;
+      context.MarkAborted();
+      return result;
+    }
+
     switch (operation.type) {
     case txn::OperationType::kGet:
-      ApplyRead(operation, context, result);
+      ApplyRead(operation, *key, context, result);
       break;
     case txn::OperationType::kSet:
-      ApplyWrite(operation, context, result);
+      ApplyWrite(operation, *key, context, result);
       break;
     case txn::OperationType::kDelete:
-      ApplyDelete(operation, result);
+      ApplyDelete(operation, *key, result);
       break;
+    case txn::OperationType::kAssertExists:
+    case txn::OperationType::kAssertNotExists:
+    case txn::OperationType::kAssertType:
+    case txn::OperationType::kAssertIntEq:
+    case txn::OperationType::kAssertBytesHashEq:
+    case txn::OperationType::kAssertStringHashEq:
     default:
       result.state = txn::TransactionState::kAborted;
       context.MarkAborted();
@@ -102,29 +115,31 @@ TransactionResult Worker::Process(const txn::TransactionRequest& request) {
   return result;
 }
 
-void Worker::ApplyRead(const txn::Operation& operation, txn::TransactionContext& context,
-                       TransactionResult& result) {
+void Worker::ApplyRead(const txn::Operation& operation, std::string_view key,
+                       txn::TransactionContext& context, TransactionResult& result) {
   OperationResult op_result{};
   op_result.type = operation.type;
-  op_result.key = operation.key;
+  op_result.key = key;
+  op_result.key_id = operation.key_id;
 
-  KeyLockGuard key_guard{lock_manager_, operation.key, lock::LockMode::kShared};
+  KeyLockGuard key_guard{lock_manager_, std::string{key}, lock::LockMode::kShared};
   std::shared_lock tree_guard{btree_mutex_};
-  const auto found = btree_.Find(operation.key);
+  const auto found = btree_.Find(std::string{key});
   if (found.has_value()) {
     op_result.success = true;
     op_result.value = found;
-    context.Write(operation.key, *found);
+    context.Write(std::string{key}, *found);
   }
 
   result.operations.push_back(std::move(op_result));
 }
 
-void Worker::ApplyWrite(const txn::Operation& operation, txn::TransactionContext& context,
-                        TransactionResult& result) {
+void Worker::ApplyWrite(const txn::Operation& operation, std::string_view key,
+                        txn::TransactionContext& context, TransactionResult& result) {
   OperationResult op_result{};
   op_result.type = operation.type;
-  op_result.key = operation.key;
+  op_result.key = key;
+  op_result.key_id = operation.key_id;
 
   if (!operation.value.has_value()) {
     result.state = txn::TransactionState::kAborted;
@@ -133,24 +148,25 @@ void Worker::ApplyWrite(const txn::Operation& operation, txn::TransactionContext
     return;
   }
 
-  KeyLockGuard key_guard{lock_manager_, operation.key, lock::LockMode::kExclusive};
+  KeyLockGuard key_guard{lock_manager_, std::string{key}, lock::LockMode::kExclusive};
   std::unique_lock tree_guard{btree_mutex_};
-  btree_.Insert(operation.key, *operation.value);
+  btree_.Insert(std::string{key}, *operation.value);
   op_result.success = true;
   op_result.value = operation.value;
-  context.Write(operation.key, *operation.value);
 
   result.operations.push_back(std::move(op_result));
 }
 
-void Worker::ApplyDelete(const txn::Operation& operation, TransactionResult& result) {
+void Worker::ApplyDelete(const txn::Operation& operation, std::string_view key,
+                         TransactionResult& result) {
   OperationResult op_result{};
   op_result.type = operation.type;
-  op_result.key = operation.key;
+  op_result.key = key;
+  op_result.key_id = operation.key_id;
 
-  KeyLockGuard key_guard{lock_manager_, operation.key, lock::LockMode::kExclusive};
+  KeyLockGuard key_guard{lock_manager_, std::string{key}, lock::LockMode::kExclusive};
   std::unique_lock tree_guard{btree_mutex_};
-  op_result.success = btree_.Erase(operation.key);
+  op_result.success = btree_.Erase(std::string{key});
 
   result.operations.push_back(std::move(op_result));
 }
