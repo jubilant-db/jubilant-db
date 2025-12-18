@@ -9,6 +9,7 @@ Enable users to run multi-key transactions that mix reads, conditional assertion
 ## Progress
 
 - [x] (2025-12-18 10:52:38Z) Drafted initial ExecPlan based on current transaction pipeline, lock manager, and specification.
+- [x] (2025-12-18 11:31:18Z) Added work-parallelization tracks and shared contracts so multiple contributors can advance independently.
 - [ ] (2025-12-18 10:52:38Z) Extend transaction model to express key tables, read/write modes, and ASSERT operations in request parsing and validation.
 - [ ] (2025-12-18 10:52:38Z) Rework transaction execution to lock declared keys in canonical order, honor overlay read-your-writes, and enforce conditional checks before mutations.
 - [ ] (2025-12-18 10:52:38Z) Add concurrency-focused unit and integration tests that prove correctness (no isolation violations) and exercise overlapping transactions for performance characteristics.
@@ -38,7 +39,21 @@ Begin by extending the transaction request model to include a key table with per
 
 Introduce unit tests that exercise conditional logic locally (e.g., ASSERT_NOT_EXISTS followed by SET, ASSERT_INT_EQ guarding an increment) and integration-style tests that spin up multiple workers sharing a `TransactionReceiver` to submit overlapping transactions. Design concurrency tests to include a mix of conflicting and non-conflicting key sets to show parallel execution (non-overlapping keys complete concurrently) while conflicting transactions serialize according to lock ordering without deadlocks or lost updates. Add timing/throughput assertions where practical (e.g., measuring that non-conflicting transactions complete within a bounded window compared to sequential execution). Update docs and examples to illustrate how to craft conditional transactions and interpret results.
 
+## Work Parallelization
+
+Multiple contributors can proceed with minimal coordination by aligning on the interfaces defined in the `Interfaces and Dependencies` section. Use the following tracks, which only depend on those shared headers and the existing storage and lock modules:
+
+- Request and validation track: own the `src/txn/transaction_request.*` changes that add `KeySpec`, the expanded `OperationType` enum, validation helpers, and JSON parsing/builders. Deliver sample builders used by tests so other tracks can construct transactions without new wiring work.
+- Transaction context track: extend `src/txn/transaction_context.*` to add overlay-first reads, cached lookups, ASSERT evaluation helpers, and commit staging. This track only depends on the request structures and can expose a header-only contract to unblock the worker track.
+- Worker execution track: refactor `src/server/worker.*` to adopt the new request shapes, acquire locks using sorted `KeySpec` entries, and route all operations through the enhanced `TransactionContext`. When the context API stabilizes, this track can run without waiting on docs or tests.
+- Concurrency test and harness track: add builders and timing assertions in `tests/transaction_context_tests.cpp` and `tests/server_worker_tests.cpp` (or a new integration file). This track can start once the request builders exist, using temporary fakes for worker/context behavior until the concrete implementations land.
+- Documentation and wire track: update `docs/txn-wire-v0.0.2.md`, `README.md`, and example payloads to reflect key tables and ASSERT operations. This work can proceed in parallel so long as it stays consistent with the request schema produced by the request track.
+
+Each track should publish any new structs or helper signatures in headers early (even with stub implementations) so others can compile against them without synchronous coordination. Keep integration points narrow: only the agreed request structs, context APIs, and worker entry points should be required across tracks.
+
 ## Concrete Steps
+
+The numbered steps align with the tracks above; steps 1–5 can progress concurrently once the shared headers are in place, and step 6 should run after code lands.
 
 1. Expand transaction definitions in `src/txn/transaction_request.h/.cpp` to add key-table structures, ASSERT operation variants, and stricter validation (unknown key IDs, mode mismatches, missing values). Reflect these changes in any request builders or parsers used by the server.
 2. Augment `src/txn/transaction_context.*` to maintain both overlay writes and cached reads, exposing helpers for ASSERT evaluation and a way to stage commit-ready mutations separate from runtime state transitions.
@@ -84,3 +99,5 @@ Define the following interfaces to keep the implementation stable:
     Use sorted `KeySpec` entries to acquire locks before executing operations; expose a helper to evaluate ASSERT operations against a `TransactionContext` that merges overlay and BTree reads; ensure failures set transaction state to aborted and release locks cleanly.
 - Testing utilities:
     Helper functions to build transaction requests with key tables and operation lists, plus timing harnesses to submit batches through `TransactionReceiver` to multiple `Worker` instances for concurrency validation.
+
+Revision Note (2025-12-18 11:31:18Z): Added explicit work-parallelization tracks and clarified how contributors can progress concurrently with shared headers and narrow integration points.
