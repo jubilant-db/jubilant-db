@@ -112,6 +112,10 @@ int main(int argc, char** argv) {
     if (!parse_result.options.has_value()) {
       return 1;
     }
+
+    std::cout << std::unitbuf;
+    std::cerr << std::unitbuf;
+
     const auto& options = parse_result.options;
 
     const auto config = jubilant::config::ConfigLoader::LoadFromFile(options->config_path);
