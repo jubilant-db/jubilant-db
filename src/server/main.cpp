@@ -38,7 +38,6 @@ struct ParseResult {
 ParseResult ParseArgs(int argc, char** argv) {
   ParseResult result{};
   CliOptions options{};
-  bool help_requested = false;
   bool invalid_args = false;
 
   for (int i = 1; i < argc; ++i) {
@@ -51,30 +50,32 @@ ParseResult ParseArgs(int argc, char** argv) {
 
     if (arg == "--config" && i + 1 < argc) {
       options.config_path = argv[++i];
-    } else if (arg == "--workers" && i + 1 < argc) {
+      continue;
+    }
+    if (arg == "--workers" && i + 1 < argc) {
       try {
         options.workers = static_cast<std::size_t>(std::stoul(argv[++i]));
       } catch (const std::exception&) {
         PrintUsage(argv[0]);
         return result;
       }
-    } else if (arg == "--backlog" && i + 1 < argc) {
+      continue;
+    }
+    if (arg == "--backlog" && i + 1 < argc) {
       try {
         options.backlog = std::stoi(argv[++i]);
       } catch (const std::exception&) {
         PrintUsage(argv[0]);
         return result;
       }
-    } else if (arg == "--help" || arg == "-h") {
-      help_requested = true;
-      break;
-    } else {
-      invalid_args = true;
-      break;
+      continue;
     }
+
+    invalid_args = true;
+    break;
   }
 
-  if (help_requested || invalid_args) {
+  if (invalid_args) {
     PrintUsage(argv[0]);
     return result;
   }
@@ -137,8 +138,9 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "jubildb server started with " << worker_count << " workers at "
-              << network_config.host << ":" << network_server.port() << "\n";
-    std::cout << "Database path: " << std::filesystem::absolute(config->db_path).string() << "\n";
+              << network_config.host << ":" << network_server.port() << std::endl;
+    std::cout << "Database path: " << std::filesystem::absolute(config->db_path).string()
+              << std::endl;
 
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);
@@ -149,7 +151,7 @@ int main(int argc, char** argv) {
 
     network_server.Stop();
     core_server.Stop();
-    std::cout << "jubildb server shut down gracefully\n";
+    std::cout << "jubildb server shut down gracefully" << std::endl;
   } catch (const std::exception& ex) {
     std::cerr << "Server bootstrap failed: " << ex.what() << "\n";
     return 1;
