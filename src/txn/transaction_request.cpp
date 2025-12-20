@@ -70,6 +70,11 @@ bool TransactionRequest::Valid() const {
     if (key_spec == nullptr) {
       return false;
     }
+    const auto required_lock_mode = LockModeForOperation(operation.type);
+    if (key_spec->mode == lock::LockMode::kShared &&
+        required_lock_mode == lock::LockMode::kExclusive) {
+      return false;
+    }
     if (!operation.key.empty() && operation.key != key_spec->key) {
       return false;
     }
@@ -77,6 +82,9 @@ bool TransactionRequest::Valid() const {
       return false;
     }
     if (RequiresExpectation(operation.type) && !operation.expected.has_value()) {
+      return false;
+    }
+    if (!RequiresExpectation(operation.type) && operation.expected.has_value()) {
       return false;
     }
     return true;
@@ -119,7 +127,8 @@ lock::LockMode LockModeForOperation(OperationType type) noexcept {
   return lock::LockMode::kShared;
 }
 
-TransactionRequest BuildTransactionRequest(std::uint64_t txn_id, std::vector<Operation> operations) {
+TransactionRequest BuildTransactionRequest(std::uint64_t txn_id,
+                                           std::vector<Operation> operations) {
   TransactionRequest request{};
   request.id = txn_id;
 

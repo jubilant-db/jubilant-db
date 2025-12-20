@@ -53,23 +53,27 @@ private:
     KeyLockGuard(const KeyLockGuard&) = delete;
     KeyLockGuard& operator=(const KeyLockGuard&) = delete;
 
-    KeyLockGuard(KeyLockGuard&&) = delete;
-    KeyLockGuard& operator=(KeyLockGuard&&) = delete;
+    KeyLockGuard(KeyLockGuard&& other) noexcept;
+    KeyLockGuard& operator=(KeyLockGuard&& other) noexcept;
 
   private:
     lock::LockManager& manager_;
     std::string key_;
     lock::LockMode mode_;
+    bool owns_lock_{false};
   };
 
   void Run();
   TransactionResult Process(const txn::TransactionRequest& request);
   void ApplyRead(const txn::Operation& operation, std::string_view key,
                  txn::TransactionContext& context, TransactionResult& result);
-  void ApplyWrite(const txn::Operation& operation, std::string_view key,
-                  txn::TransactionContext& context, TransactionResult& result);
+  static void ApplyWrite(const txn::Operation& operation, std::string_view key,
+                         txn::TransactionContext& context, TransactionResult& result);
   void ApplyDelete(const txn::Operation& operation, std::string_view key,
-                   TransactionResult& result);
+                   txn::TransactionContext& context, TransactionResult& result);
+  [[nodiscard]] std::vector<KeyLockGuard>
+  AcquireTransactionLocks(const txn::TransactionRequest& request);
+  void CommitTransaction(const txn::TransactionRequest& request, txn::TransactionContext& context);
 
   std::string name_;
   TransactionReceiver& receiver_;

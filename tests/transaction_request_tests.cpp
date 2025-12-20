@@ -37,3 +37,17 @@ TEST(TransactionRequestTest, UsesSharedLockForReads) {
   EXPECT_EQ(request.keys.front().mode, LockMode::kShared);
   EXPECT_EQ(request.operations.front().key_id, 0U);
 }
+
+TEST(TransactionRequestTest, RejectsWeakerDeclaredLockModes) {
+  Record record{};
+  record.value = std::string{"value"};
+
+  TransactionRequest request{};
+  request.id = 11;
+  request.keys.push_back(
+      jubilant::txn::KeySpec{.id = 0, .mode = LockMode::kShared, .key = "alpha"});
+  request.operations.push_back(
+      Operation{.type = OperationType::kSet, .key_id = 0, .key = "alpha", .value = record});
+
+  EXPECT_FALSE(request.Valid());
+}

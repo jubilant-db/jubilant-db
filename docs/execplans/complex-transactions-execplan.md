@@ -12,16 +12,16 @@ Enable users to run multi-key transactions that mix reads, conditional assertion
 - [x] (2025-12-18 11:31:18Z) Added work-parallelization tracks and shared contracts so multiple contributors can advance independently.
 - [x] (2025-12-18 13:10:12Z) Prepared execution scaffolding: relocated the plan under `docs/execplans/`, enumerated shared headers/builders, and clarified sequencing so tracks can start immediately.
 - [x] (2025-12-18 13:30:26Z) Published header-first scaffolding in code: added key tables and derived lock modes to transaction requests, plumbed key IDs through workers and network parsing, introduced overlay-first context helpers, and seeded validation/unit tests so concurrent tracks can build against stable shapes.
-- [ ] (2025-12-18 10:52:38Z) Extend the transaction model to express key tables, read/write modes, and ASSERT operations in request parsing and validation.
-- [ ] (2025-12-18 10:52:38Z) Rework transaction execution to lock declared keys in canonical order, honor overlay read-your-writes, and enforce conditional checks before mutations.
+- [x] (2025-12-18 19:55:15Z) Hardened transaction requests with lock-mode-aware validation and expectation gating so declared key tables drive canonical locking and parsing errors surface early.
+- [x] (2025-12-18 19:55:15Z) Reworked worker execution to acquire declared locks in sorted order, stage overlay mutations, and commit once after successful validation; aborted transactions now leave storage untouched for future concurrency tests.
 - [ ] (2025-12-18 10:52:38Z) Add concurrency-focused unit and integration tests that prove correctness (no isolation violations) and exercise overlapping transactions for performance characteristics.
 - [ ] (2025-12-18 10:52:38Z) Document the new transaction semantics in README/docs and adjust examples for conditional operations.
 - [ ] (2025-12-18 10:52:38Z) Finalize retrospective after tests pass and concurrency guarantees are demonstrated.
 
 ## Surprises & Discoveries
 
-- Observation: Current worker processing locks per operation and does not predeclare key sets, so canonical ordering for deadlock avoidance and lock sharing is absent. Evidence: `Worker::Process` iterates operations and locks inside each Apply* call in `src/server/worker.cpp`.
-- Observation: Overlay support exists but reads inside workers bypass the overlay before hitting storage, meaning read-your-writes is only captured opportunistically after storage writes. Evidence: `TransactionContext::Read` only checks the overlay, while `Worker::ApplyRead` queries the BTree directly and writes into the overlay afterward.
+- Observation: ASSERT_* operations remain parsed-only; worker execution still aborts when encountering them. Evidence: `Worker::Process` falls through to the default case for ASSERT operations in `src/server/worker.cpp`.
+- Observation: Staging writes and deletes in the transaction overlay while holding canonical locks prevents partial commits on aborts, which tightened the invariants for upcoming concurrency tests. Evidence: `Worker::CommitTransaction` flushes overlay entries only after the operation loop completes in `src/server/worker.cpp`.
 
 ## Decision Log
 
@@ -34,7 +34,7 @@ Pending implementation; this section will summarize concurrency proof points, ga
 
 ## Context and Orientation
 
-Transactions now include a declared key table: `txn::TransactionRequest` exposes `KeySpec` entries (with derived `lock::LockMode`s) plus operations keyed by `key_id`, and the builder in `src/txn/transaction_request.*` canonicalizes keys while widening locks for writes. ASSERT operations are represented in the enum but currently abort in `server::Worker` until evaluation lands. `TransactionContext` still hosts overlay state in `src/txn/transaction_context.*` with new helper methods for overlay-first reads and delete staging. The server pipeline uses `server::TransactionReceiver` as a bounded queue and `server::Worker` to process requests in threads (`src/server/worker.*`), acquiring locks per operation via `lock::LockManager` (`src/lock/lock_manager.*`) and directly mutating the BTree (`src/storage/btree/btree.*`). Tests cover single-worker processing, request builders, and overlay caching in `tests/server_worker_tests.cpp`, `tests/transaction_request_tests.cpp`, and `tests/transaction_context_tests.cpp`. ASSERT evaluation, canonical lock acquisition, and concurrency proof tests still need to land.
+Transactions now include a declared key table: `txn::TransactionRequest` exposes `KeySpec` entries (with derived `lock::LockMode`s) plus operations keyed by `key_id`, and the builder in `src/txn/transaction_request.*` canonicalizes keys while widening locks for writes. ASSERT operations are represented in the enum but currently abort in `server::Worker` until evaluation lands. `TransactionContext` still hosts overlay state in `src/txn/transaction_context.*` with new helper methods for overlay-first reads and delete staging. The server pipeline uses `server::TransactionReceiver` as a bounded queue and `server::Worker` to process requests in threads (`src/server/worker.*`), acquiring the declared key set in canonical order via `lock::LockManager` (`src/lock/lock_manager.*`), staging mutations in the overlay, and committing to the BTree (`src/storage/btree/btree.*`) only after the operation loop succeeds. Tests cover single-worker processing, request builders, and overlay caching in `tests/server_worker_tests.cpp`, `tests/transaction_request_tests.cpp`, and `tests/transaction_context_tests.cpp`. ASSERT evaluation and concurrency proof tests still need to land.
 
 ## Plan of Work
 
@@ -66,11 +66,13 @@ The numbered steps align with the tracks above; steps 0–5 can progress concurr
    - Document the stubbed behavior and TODOs directly in the headers so downstream tracks understand expectations and can integrate without guessing.
    - Status (2025-12-18 13:30:26Z): Completed. Builders now derive key tables and lock modes; worker/network parsing honor key IDs; overlay helpers exist for read-through and delete staging; ASSERT operations abort early until evaluation lands; new request/context unit tests keep scaffolding stable for parallel tracks.
 1. Expand transaction definitions in `src/txn/transaction_request.h/.cpp` to add key-table structures, ASSERT operation variants, and stricter validation (unknown key IDs, mode mismatches, missing values). Reflect these changes in any request builders or parsers used by the server.
+   - Status (2025-12-18 19:55:15Z): Completed. Builders derive canonical lock modes, validation rejects weaker declared locks or mismatched expectations, and network parsing continues to surface malformed ASSERT payloads early.
 2. Augment `src/txn/transaction_context.*` to maintain both overlay writes and cached reads, exposing helpers for ASSERT evaluation and a way to stage commit-ready mutations separate from runtime state transitions.
 3. Refactor `src/server/worker.*` to:
    - Pre-collect declared keys from the request, sort them, and acquire shared/exclusive locks before executing operations.
    - Evaluate ASSERT operations against the overlay-first view, aborting the transaction without partial commits on failure.
    - Apply GET/SET/DELETE using the overlay to provide read-your-writes and defer durable BTree updates until after all checks succeed.
+   - Status (2025-12-18 19:55:15Z): Partially completed. Workers now acquire the full declared key set in sorted order, stage overlay mutations, and commit once at the end; ASSERT evaluation remains stubbed and will be wired into the overlay view next.
 4. Add concurrency-aware tests:
    - Unit tests for ASSERT evaluation and overlay behavior in `tests/transaction_context_tests.cpp` or a new `tests/transaction_planner_tests.cpp`.
    - Multi-worker tests in `tests/server_worker_tests.cpp` (or a dedicated integration test) that enqueue interleaved transactions with overlapping keys to verify serialization and with disjoint keys to verify parallelism and performance.
